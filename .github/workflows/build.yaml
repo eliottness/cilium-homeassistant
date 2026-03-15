@@ -12,7 +12,30 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  discover-cilium-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.versions.outputs.versions }}
+    steps:
+      - name: Fetch last 4 Cilium minor versions (latest patch each)
+        id: versions
+        run: |
+          # Get all Cilium release tags, find the latest patch for each minor
+          VERSIONS=$(curl -s "https://api.github.com/repos/cilium/cilium/releases?per_page=100" \
+            | jq -r '
+              [.[] | select(.prerelease == false and .draft == false) | .tag_name | ltrimstr("v")]
+              | group_by(split(".")[0:2] | join("."))
+              | map(sort_by(split(".") | map(tonumber)) | last)
+              | sort_by(split(".") | map(tonumber))
+              | reverse
+              | .[0:4]
+              | reverse
+            ')
+          echo "versions=${VERSIONS}" >> "$GITHUB_OUTPUT"
+          echo "Discovered Cilium versions: ${VERSIONS}"
+
   build:
+    needs: discover-cilium-versions
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -20,17 +43,12 @@ jobs:
     strategy:
       matrix:
         arch: [aarch64, amd64]
-        cilium_version: ["1.19.0", "1.19.1"]
+        cilium_version: ${{ fromJson(needs.discover-cilium-versions.outputs.versions) }}
         include:
           - arch: aarch64
             platform: linux/arm64
           - arch: amd64
             platform: linux/amd64
-          # Mark 1.19.1 as default (gets the "latest" tag)
-          - cilium_version: "1.19.1"
-            is_default: true
-          - cilium_version: "1.19.0"
-            is_default: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -59,16 +77,6 @@ jobs:
             echo "tag=${VERSION}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build tags
-        id: tags
-        run: |
-          BASE="${{ env.REGISTRY }}/${{ github.repository_owner }}/cilium-homeassistant/${{ matrix.arch }}-cilium-router"
-          TAGS="${BASE}:${{ steps.version.outputs.tag }}-cilium${{ matrix.cilium_version }}"
-          if [[ "${{ matrix.is_default }}" == "true" ]]; then
-            TAGS="${TAGS},${BASE}:${{ steps.version.outputs.tag }},${BASE}:latest"
-          fi
-          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
-
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -76,7 +84,8 @@ jobs:
           file: cilium-router/Dockerfile
           platforms: ${{ matrix.platform }}
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.tags.outputs.tags }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/cilium-homeassistant/${{ matrix.arch }}-cilium-router:${{ steps.version.outputs.tag }}-cilium${{ matrix.cilium_version }}
           build-args: |
             CILIUM_VERSION=${{ matrix.cilium_version }}
             BUILD_ARCH=${{ matrix.arch }}

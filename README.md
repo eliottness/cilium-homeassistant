@@ -50,18 +50,13 @@ helm upgrade cilium cilium/cilium -n kube-system -f values.yaml
 
 ### 5. DNS (optional)
 
-HA runs its own CoreDNS at `172.30.32.3` which doesn't know about `cluster.local` domains. Adding the k8s CoreDNS as a DNS server in the HA UI is not enough — hassio_dns won't forward `cluster.local` queries there.
+HA runs its own CoreDNS which doesn't know about `cluster.local` domains. Set the k8s CoreDNS as the DNS server:
 
-You need to add a forward zone to the hassio_dns Corefile. Edit `/usr/share/hassio/dns/coredns.tmpl` (via SSH addon):
-
-```
-cluster.local {
-    forward . 10.85.0.10
-    log
-}
+```bash
+ha dns options --servers dns://10.85.0.10
 ```
 
-Replace `10.85.0.10` with your actual CoreDNS ClusterIP. Then restart DNS: `ha dns restart`
+Replace `10.85.0.10` with your CoreDNS ClusterIP (`kubectl get svc -n kube-system kube-dns -o jsonpath='{.spec.clusterIP}'`).
 
 ### 6. Start
 
