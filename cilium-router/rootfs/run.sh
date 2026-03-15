@@ -43,67 +43,69 @@ if ! mount | grep -q '/sys/fs/bpf type bpf'; then
 fi
 
 # ── 3. Host cgroup v2 (critical for socket LB) ──────────────────
-# Inspired by the netdata HA addon approach: use nsenter into PID 1's
-# mount namespace + docker CLI to mount host cgroup into our container
-# from the outside, then restart ourselves so the mount is visible.
+# Use nsenter into PID 1's mount namespace to mount host cgroup into
+# our container's overlay. No restart needed if mount propagation works.
 # See: https://github.com/felipecrs/netdata-hass-addon
 CGROUP_ROOT="/run/cilium/cgroupv2"
-CGROUP_MARKER="/var/run/cilium/.cgroup-mounted"
+mkdir -p "${CGROUP_ROOT}"
 
-if [ -f "${CGROUP_MARKER}" ]; then
-    echo "[init] Host cgroup already mounted from previous run"
-else
-    echo "[init] Mounting host cgroup v2 via nsenter + docker..."
+echo "[init] Mounting host cgroup v2 via nsenter + Docker API..."
 
-    # Find our container ID from /proc/self/mountinfo
-    CONTAINER_ID=$(sed -n 's|.*docker/containers/\([a-f0-9]*\)/.*|\1|p' /proc/self/mountinfo | head -1)
-    if [ -z "${CONTAINER_ID}" ]; then
-        # Fallback: try cgroup path
-        CONTAINER_ID=$(sed -n 's|.*/docker-\([a-f0-9]*\)\.scope.*|\1|p' /proc/self/cgroup | head -1)
-    fi
+# Find our container ID from /proc/self/mountinfo
+CONTAINER_ID=$(sed -n 's|.*docker/containers/\([a-f0-9]*\)/.*|\1|p' /proc/self/mountinfo | head -1)
+if [ -z "${CONTAINER_ID}" ]; then
+    CONTAINER_ID=$(sed -n 's|.*/docker-\([a-f0-9]*\)\.scope.*|\1|p' /proc/self/cgroup | head -1)
+fi
 
-    if [ -n "${CONTAINER_ID}" ]; then
-        echo "[init]   Container ID: ${CONTAINER_ID:0:12}"
+CGROUP_MOUNTED=false
+if [ -n "${CONTAINER_ID}" ]; then
+    echo "[init]   Container ID: ${CONTAINER_ID:0:12}"
 
-        # Use Docker API via curl (docker CLI not in Cilium image)
-        DOCKER_SOCK="/var/run/docker.sock"
-        MERGED_DIR=$(curl -s --unix-socket "${DOCKER_SOCK}" \
-            "http://localhost/containers/${CONTAINER_ID}/json" 2>/dev/null \
-            | jq -r '.GraphDriver.Data.MergedDir // empty')
+    # Use Docker API via curl (docker CLI not in Cilium image)
+    DOCKER_SOCK="/var/run/docker.sock"
+    if [ -S "${DOCKER_SOCK}" ]; then
+        API_RESPONSE=$(curl -s --unix-socket "${DOCKER_SOCK}" \
+            "http://localhost/containers/${CONTAINER_ID}/json" 2>&1)
+        MERGED_DIR=$(echo "${API_RESPONSE}" | jq -r '.GraphDriver.Data.MergedDir // empty' 2>/dev/null)
 
         if [ -n "${MERGED_DIR}" ]; then
             echo "[init]   Merged dir: ${MERGED_DIR}"
 
-            # Use nsenter into host's mount namespace to bind-mount host cgroup
-            # into our container's filesystem from the outside
+            # Mount host cgroup into our overlay from the host's mount namespace
             nsenter --target 1 --mount -- \
-                mkdir -p "${MERGED_DIR}${CGROUP_ROOT}" 2>/dev/null
+                mkdir -p "${MERGED_DIR}${CGROUP_ROOT}" 2>&1
 
-            nsenter --target 1 --mount -- \
-                mount --bind /sys/fs/cgroup "${MERGED_DIR}${CGROUP_ROOT}" 2>&1 && {
-                echo "[init]   Host cgroup mounted into container overlay"
+            if nsenter --target 1 --mount -- \
+                mount --bind /sys/fs/cgroup "${MERGED_DIR}${CGROUP_ROOT}" 2>&1; then
+                echo "[init]   Host cgroup mounted into overlay"
 
-                # Mark that we mounted it, then restart ourselves
-                # so the mount becomes visible inside the container
-                mkdir -p "$(dirname "${CGROUP_MARKER}")"
-                touch "${CGROUP_MARKER}"
-
-                echo "[init]   Restarting container to pick up the mount..."
-                curl -s --unix-socket "${DOCKER_SOCK}" \
-                    -X POST "http://localhost/containers/${CONTAINER_ID}/restart?t=5" &
-                sleep 10
-                exit 0
-            } || {
+                # Check if it's immediately visible (mount propagation)
+                if [ -d "${CGROUP_ROOT}/system.slice" ] || [ -f "${CGROUP_ROOT}/cgroup.controllers" ]; then
+                    echo "[init]   Mount is visible inside container (propagation worked)"
+                    CGROUP_MOUNTED=true
+                else
+                    echo "[init]   Mount not visible yet, trying remount inside container..."
+                    # Force visibility by mounting from /proc/1/root
+                    mount --bind /proc/1/root"${CGROUP_ROOT}" "${CGROUP_ROOT}" 2>&1 && {
+                        echo "[init]   Remount from /proc/1/root succeeded"
+                        CGROUP_MOUNTED=true
+                    } || echo "[init]   Remount failed"
+                fi
+            else
                 echo "[init]   WARNING: nsenter mount failed"
-            }
+            fi
         else
-            echo "[init]   WARNING: Could not get container merged dir (Docker API response: $(curl -s --unix-socket "${DOCKER_SOCK}" "http://localhost/containers/${CONTAINER_ID}/json" 2>/dev/null | head -c 200))"
+            echo "[init]   WARNING: No merged dir. Docker socket: $(ls -la ${DOCKER_SOCK} 2>&1)"
+            echo "[init]   API response (first 300 chars): ${API_RESPONSE:0:300}"
         fi
     else
-        echo "[init]   WARNING: Could not determine container ID"
+        echo "[init]   WARNING: Docker socket not found at ${DOCKER_SOCK}"
     fi
+else
+    echo "[init]   WARNING: Could not determine container ID"
+fi
 
-    # Fallback
+if [ "${CGROUP_MOUNTED}" = "false" ]; then
     CGROUP_ROOT="/sys/fs/cgroup"
     echo "[init]   FALLBACK: Using container cgroup at ${CGROUP_ROOT}"
 fi
