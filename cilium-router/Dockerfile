@@ -1,5 +1,5 @@
 # Global args must be before the first FROM to be usable in FROM lines
-ARG CILIUM_VERSION=1.19.0
+ARG CILIUM_VERSION=1.19.1
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 
 # Stage 1: Cilium binaries from official image

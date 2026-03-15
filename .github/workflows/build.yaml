@@ -10,7 +10,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  CILIUM_VERSION: "1.19.0"
 
 jobs:
   build:
@@ -21,6 +20,7 @@ jobs:
     strategy:
       matrix:
         arch: [aarch64, amd64]
+        cilium_version: ["1.19.0", "1.19.1"]
         include:
           - arch: aarch64
             platform: linux/arm64
@@ -28,6 +28,11 @@ jobs:
           - arch: amd64
             platform: linux/amd64
             build_from: ghcr.io/home-assistant/amd64-base-debian:bookworm
+          # Mark 1.19.1 as default (gets the "latest" tag)
+          - cilium_version: "1.19.1"
+            is_default: true
+          - cilium_version: "1.19.0"
+            is_default: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,12 +55,21 @@ jobs:
         run: |
           VERSION=$(grep '^version:' cilium-router/config.yaml | awk '{print $2}' | tr -d '"')
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          # Use tag if available, otherwise version from config
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "tag=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
           else
             echo "tag=${VERSION}" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Build tags
+        id: tags
+        run: |
+          BASE="${{ env.REGISTRY }}/${{ github.repository_owner }}/cilium-homeassistant/${{ matrix.arch }}-cilium-router"
+          TAGS="${BASE}:${{ steps.version.outputs.tag }}-cilium${{ matrix.cilium_version }}"
+          if [[ "${{ matrix.is_default }}" == "true" ]]; then
+            TAGS="${TAGS},${BASE}:${{ steps.version.outputs.tag }},${BASE}:latest"
+          fi
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -64,12 +78,10 @@ jobs:
           file: cilium-router/Dockerfile
           platforms: ${{ matrix.platform }}
           push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/cilium-homeassistant/${{ matrix.arch }}-cilium-router:${{ steps.version.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/cilium-homeassistant/${{ matrix.arch }}-cilium-router:latest
+          tags: ${{ steps.tags.outputs.tags }}
           build-args: |
             BUILD_FROM=${{ matrix.build_from }}
-            CILIUM_VERSION=${{ env.CILIUM_VERSION }}
+            CILIUM_VERSION=${{ matrix.cilium_version }}
             BUILD_ARCH=${{ matrix.arch }}
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
             BUILD_DESCRIPTION=Routes traffic to Kubernetes pods via Cilium agent
