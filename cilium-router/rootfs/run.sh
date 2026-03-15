@@ -65,8 +65,11 @@ else
     if [ -n "${CONTAINER_ID}" ]; then
         echo "[init]   Container ID: ${CONTAINER_ID:0:12}"
 
-        # Get the container's merged filesystem path on the host
-        MERGED_DIR=$(docker inspect --format '{{.GraphDriver.Data.MergedDir}}' "${CONTAINER_ID}" 2>/dev/null)
+        # Use Docker API via curl (docker CLI not in Cilium image)
+        DOCKER_SOCK="/var/run/docker.sock"
+        MERGED_DIR=$(curl -s --unix-socket "${DOCKER_SOCK}" \
+            "http://localhost/containers/${CONTAINER_ID}/json" 2>/dev/null \
+            | jq -r '.GraphDriver.Data.MergedDir // empty')
 
         if [ -n "${MERGED_DIR}" ]; then
             echo "[init]   Merged dir: ${MERGED_DIR}"
@@ -77,7 +80,7 @@ else
                 mkdir -p "${MERGED_DIR}${CGROUP_ROOT}" 2>/dev/null
 
             nsenter --target 1 --mount -- \
-                mount --bind --read-only /sys/fs/cgroup "${MERGED_DIR}${CGROUP_ROOT}" 2>&1 && {
+                mount --bind /sys/fs/cgroup "${MERGED_DIR}${CGROUP_ROOT}" 2>&1 && {
                 echo "[init]   Host cgroup mounted into container overlay"
 
                 # Mark that we mounted it, then restart ourselves
@@ -86,15 +89,15 @@ else
                 touch "${CGROUP_MARKER}"
 
                 echo "[init]   Restarting container to pick up the mount..."
-                docker restart "${CONTAINER_ID}" &
-                # Give docker time to send the signal, then exit
-                sleep 5
+                curl -s --unix-socket "${DOCKER_SOCK}" \
+                    -X POST "http://localhost/containers/${CONTAINER_ID}/restart?t=5" &
+                sleep 10
                 exit 0
             } || {
                 echo "[init]   WARNING: nsenter mount failed"
             }
         else
-            echo "[init]   WARNING: Could not get container merged dir"
+            echo "[init]   WARNING: Could not get container merged dir (Docker API response: $(curl -s --unix-socket "${DOCKER_SOCK}" "http://localhost/containers/${CONTAINER_ID}/json" 2>/dev/null | head -c 200))"
         fi
     else
         echo "[init]   WARNING: Could not determine container ID"
