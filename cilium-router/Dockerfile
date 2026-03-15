@@ -32,10 +32,8 @@ COPY --from=cilium /init-container.sh /usr/local/bin/cilium-init-container.sh
 # Addon overlay
 COPY rootfs /
 
-RUN chmod +x /etc/cont-init.d/*.sh \
-    && chmod +x /etc/services.d/*/run \
-    && chmod +x /etc/services.d/*/finish 2>/dev/null || true \
-    && chmod +x /usr/local/bin/*.sh
+RUN chmod +x /run.sh \
+    && chmod +x /usr/local/bin/*.sh 2>/dev/null || true
 
 RUN mkdir -p /var/run/cilium /var/lib/cilium /etc/cilium \
     /tmp/cilium/config-map /run/cilium/cgroupv2
@@ -47,3 +45,5 @@ LABEL \
     io.hass.arch="${BUILD_ARCH}" \
     io.hass.type="addon" \
     io.hass.version=${BUILD_VERSION}
+
+CMD ["/run.sh"]

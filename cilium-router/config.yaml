@@ -8,7 +8,7 @@ arch:
   - amd64
 startup: "system"
 boot: "manual"
-init: true
+init: false
 
 # Full network + BPF access (matches DaemonSet security context)
 host_network: true
