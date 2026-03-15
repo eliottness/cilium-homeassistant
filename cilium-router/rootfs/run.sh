@@ -43,14 +43,16 @@ if ! mount | grep -q '/sys/fs/bpf type bpf'; then
 fi
 
 # ── 3. Mount HOST's cgroup v2 (critical for socket LB) ──────────
-# With host_pid: true, we can nsenter into PID 1's cgroup namespace
-# to mount the real host cgroup, exactly like the Cilium DaemonSet does.
-echo "[init] Mounting host cgroup v2 via nsenter..."
+# With host_pid: true, /proc/1/root/ is the host's root filesystem.
+# /proc/1/root/sys/fs/cgroup is the HOST's real cgroup2 mount.
+# Bind-mounting it makes socket LB BPF programs intercept ALL host processes.
+echo "[init] Bind-mounting host cgroup v2..."
 mkdir -p /run/cilium/cgroupv2
-nsenter --cgroup=/proc/1/ns/cgroup --mount=/proc/1/ns/mnt -- \
-    mount -t cgroup2 none /run/cilium/cgroupv2 2>/dev/null || {
-    echo "[init] WARNING: nsenter cgroup mount failed, falling back to /sys/fs/cgroup"
-}
+if mount --bind /proc/1/root/sys/fs/cgroup /run/cilium/cgroupv2 2>/dev/null; then
+    echo "[init] Host cgroup v2 mounted at /run/cilium/cgroupv2"
+else
+    echo "[init] WARNING: Host cgroup bind-mount failed, falling back to /sys/fs/cgroup"
+fi
 
 # ── 4. Set sysctls ──────────────────────────────────────────────
 echo "[init] Loading kernel modules..."
