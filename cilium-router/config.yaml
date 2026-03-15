@@ -33,8 +33,10 @@ options:
   kubeconfig_path: "/config/kubeconfig"
   node_name: "ha-cilium"
   log_level: "info"
+  cilium_namespace: "kube-system"
 
 schema:
   kubeconfig_path: str
   node_name: str
   log_level: "list(info|debug|warning|error)"
+  cilium_namespace: str

@@ -2,3 +2,5 @@
 .claude/
 cilium/
 values.yaml
+*.kubeconfig
+kubeconfig

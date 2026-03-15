@@ -51,10 +51,12 @@ helm upgrade cilium cilium/cilium -n kube-system -f values.yaml
 HA runs its own CoreDNS which doesn't know about `cluster.local` domains. Set the k8s CoreDNS as the DNS server:
 
 ```bash
-ha dns options --servers dns://10.85.0.10
-```
+# Find your CoreDNS ClusterIP:
+kubectl get svc -n kube-system kube-dns -o jsonpath='{.spec.clusterIP}'
 
-Replace `10.85.0.10` with your CoreDNS ClusterIP (`kubectl get svc -n kube-system kube-dns -o jsonpath='{.spec.clusterIP}'`).
+# Set it as HA's DNS server:
+ha dns options --servers dns://<YOUR_COREDNS_CLUSTER_IP>
+```
 
 ### 6. Start
 
@@ -64,7 +66,7 @@ Click **Start** and check the **Log** tab. You should see:
 - Cilium config fetched (160+ keys)
 - Agent starting
 
-### 6. Verify
+### 7. Verify
 
 ```bash
 # Check the node appeared:
@@ -96,6 +98,7 @@ ping <any-pod-ip>
 | `kubeconfig_path` | `/config/kubeconfig` | Path to the kubeconfig file inside the addon |
 | `node_name` | `ha-cilium` | Name for the K8s Node object created in the cluster |
 | `log_level` | `info` | Cilium agent log level (`info`, `debug`, `warning`, `error`) |
+| `cilium_namespace` | `kube-system` | Kubernetes namespace where Cilium is installed |
 
 ## Architecture
 
