@@ -5,7 +5,7 @@ FROM quay.io/cilium/cilium:v${CILIUM_VERSION}
 
 # Add tools needed by our addon scripts
 ARG TARGETARCH
-RUN apt-get update && apt-get install -y --no-install-recommends jq \
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && KUBE_ARCH="${TARGETARCH}" \
     && curl -fsSL "https://dl.k8s.io/release/v1.32.3/bin/linux/${KUBE_ARCH}/kubectl" -o /usr/bin/kubectl \
     && chmod +x /usr/bin/kubectl \
