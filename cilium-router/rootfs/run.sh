@@ -42,9 +42,15 @@ if ! mount | grep -q '/sys/fs/bpf type bpf'; then
     }
 fi
 
-# ── 3. Cgroup v2 ────────────────────────────────────────────────
-# We use the host's /sys/fs/cgroup (cgroup-root override in config).
-# No manual mount needed — the host already has cgroup v2 there.
+# ── 3. Mount HOST's cgroup v2 (critical for socket LB) ──────────
+# With host_pid: true, we can nsenter into PID 1's cgroup namespace
+# to mount the real host cgroup, exactly like the Cilium DaemonSet does.
+echo "[init] Mounting host cgroup v2 via nsenter..."
+mkdir -p /run/cilium/cgroupv2
+nsenter --cgroup=/proc/1/ns/cgroup --mount=/proc/1/ns/mnt -- \
+    mount -t cgroup2 none /run/cilium/cgroupv2 2>/dev/null || {
+    echo "[init] WARNING: nsenter cgroup mount failed, falling back to /sys/fs/cgroup"
+}
 
 # ── 4. Set sysctls ──────────────────────────────────────────────
 echo "[init] Loading kernel modules..."
@@ -140,8 +146,12 @@ printf '%s' "false" > /tmp/cilium/config-map/cni-exclusive
 printf '%s' "/etc/cilium/kubeconfig" > /tmp/cilium/config-map/k8s-kubeconfig-path
 # In our container, /proc IS the host proc (privileged + host_network)
 printf '%s' "/proc" > /tmp/cilium/config-map/procfs
-# Use the host's cgroup v2 root so socket LB intercepts host processes
-printf '%s' "/sys/fs/cgroup" > /tmp/cilium/config-map/cgroup-root
+# Point to the nsenter-mounted host cgroup (falls back to /sys/fs/cgroup)
+if mount | grep -q '/run/cilium/cgroupv2 type cgroup2'; then
+    printf '%s' "/run/cilium/cgroupv2" > /tmp/cilium/config-map/cgroup-root
+else
+    printf '%s' "/sys/fs/cgroup" > /tmp/cilium/config-map/cgroup-root
+fi
 
 # Create /host/proc symlink as safety net (some cilium code hardcodes /host/proc)
 ln -sfn /proc /host/proc 2>/dev/null || true
@@ -167,6 +177,23 @@ else
 fi
 
 echo "[init] === Init complete, starting services ==="
+
+# ── 9. Background diagnostics (runs after agent starts) ─────────
+(
+    sleep 45
+    echo "[diag] === DIAGNOSTICS ==="
+    echo "[diag] Cgroup mounts:"
+    mount | grep cgroup 2>&1 | while read -r line; do echo "[diag]   ${line}"; done
+    echo "[diag] Cgroup root config: $(cat /tmp/cilium/config-map/cgroup-root 2>/dev/null)"
+    echo "[diag] BPF cgroup programs:"
+    bpftool cgroup tree "$(cat /tmp/cilium/config-map/cgroup-root 2>/dev/null || echo /sys/fs/cgroup)" 2>&1 | head -30 | while read -r line; do echo "[diag]   ${line}"; done
+    echo "[diag] Service list (first 20):"
+    cilium-dbg service list 2>&1 | head -20 | while read -r line; do echo "[diag]   ${line}"; done
+    echo "[diag] Pod connectivity test:"
+    FIRST_SVC=$(cilium-dbg service list 2>/dev/null | grep ClusterIP | head -1)
+    echo "[diag]   First ClusterIP service: ${FIRST_SVC}"
+    echo "[diag] === END DIAGNOSTICS ==="
+) &
 
 # ── Start node heartbeat in background ───────────────────────────
 (
