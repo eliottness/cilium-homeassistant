@@ -3,7 +3,7 @@ set -euo pipefail
 
 # ── Read addon options from /data/options.json ────────────────────
 OPTIONS_FILE="/data/options.json"
-KUBECONFIG_PATH=$(jq -r '.kubeconfig_path // "/share/cilium/kubeconfig"' "${OPTIONS_FILE}")
+KUBECONFIG_PATH=$(jq -r '.kubeconfig_path // "/config/kubeconfig"' "${OPTIONS_FILE}")
 NODE_NAME=$(jq -r '.node_name // "ha-cilium"' "${OPTIONS_FILE}")
 LOG_LEVEL=$(jq -r '.log_level // "info"' "${OPTIONS_FILE}")
 
@@ -45,6 +45,10 @@ if ! mount | grep -q '/run/cilium/cgroupv2 type cgroup2'; then
 fi
 
 # ── 4. Set sysctls ──────────────────────────────────────────────
+echo "[init] Loading kernel modules..."
+modprobe wireguard 2>/dev/null || echo "[init] WARNING: Failed to load wireguard module"
+modprobe vxlan 2>/dev/null || true
+
 echo "[init] Configuring sysctls..."
 sysctl -w net.ipv4.ip_forward=1 2>/dev/null || true
 sysctl -w net.ipv4.conf.all.forwarding=1 2>/dev/null || true

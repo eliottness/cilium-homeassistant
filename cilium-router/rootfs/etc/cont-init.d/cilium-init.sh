@@ -39,7 +39,11 @@ if ! mount | grep -q '/run/cilium/cgroupv2 type cgroup2'; then
         bashio::log.warning "cgroup2 mount failed (may already be available)"
 fi
 
-# ── 4. Set sysctls (replaces apply-sysctl-overwrites init container) ─
+# ── 4. Load kernel modules + set sysctls ─────────────────────────
+bashio::log.info "Loading kernel modules..."
+modprobe wireguard 2>/dev/null || bashio::log.warning "Failed to load wireguard module"
+modprobe vxlan 2>/dev/null || true
+
 bashio::log.info "Configuring sysctls..."
 sysctl -w net.ipv4.ip_forward=1 2>/dev/null || true
 sysctl -w net.ipv4.conf.all.forwarding=1 2>/dev/null || true

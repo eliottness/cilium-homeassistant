@@ -25,11 +25,12 @@ full_access: true   # Needed for /sys/fs/bpf, /lib/modules, /proc/sys
 image: "ghcr.io/eliottness/cilium-homeassistant/{arch}-cilium-router"
 
 map:
+  - config:rw
   - share:rw
   - ssl:ro
 
 options:
-  kubeconfig_path: "/share/cilium/kubeconfig"
+  kubeconfig_path: "/config/kubeconfig"
   node_name: "ha-cilium"
   log_level: "info"
 
