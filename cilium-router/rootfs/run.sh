@@ -42,16 +42,15 @@ if ! mount | grep -q '/sys/fs/bpf type bpf'; then
     }
 fi
 
-# ── 3. Mount HOST's cgroup v2 (critical for socket LB) ──────────
-# With host_pid: true, /proc/1/root/ is the host's root filesystem.
-# /proc/1/root/sys/fs/cgroup is the HOST's real cgroup2 mount.
-# Bind-mounting it makes socket LB BPF programs intercept ALL host processes.
-echo "[init] Bind-mounting host cgroup v2..."
-mkdir -p /run/cilium/cgroupv2
-if mount --bind /proc/1/root/sys/fs/cgroup /run/cilium/cgroupv2 2>/dev/null; then
-    echo "[init] Host cgroup v2 mounted at /run/cilium/cgroupv2"
+# ── 3. Host cgroup v2 (critical for socket LB) ──────────────────
+# With host_pid: true, /proc/1/root/sys/fs/cgroup IS the host's
+# real cgroup2 hierarchy. Point cgroup-root there directly.
+if [ -d /proc/1/root/sys/fs/cgroup ]; then
+    echo "[init] Host cgroup v2 accessible at /proc/1/root/sys/fs/cgroup"
+    CGROUP_ROOT="/proc/1/root/sys/fs/cgroup"
 else
-    echo "[init] WARNING: Host cgroup bind-mount failed, falling back to /sys/fs/cgroup"
+    echo "[init] WARNING: Host cgroup not accessible, falling back to /sys/fs/cgroup"
+    CGROUP_ROOT="/sys/fs/cgroup"
 fi
 
 # ── 4. Set sysctls ──────────────────────────────────────────────
@@ -148,12 +147,8 @@ printf '%s' "false" > /tmp/cilium/config-map/cni-exclusive
 printf '%s' "/etc/cilium/kubeconfig" > /tmp/cilium/config-map/k8s-kubeconfig-path
 # In our container, /proc IS the host proc (privileged + host_network)
 printf '%s' "/proc" > /tmp/cilium/config-map/procfs
-# Point to the nsenter-mounted host cgroup (falls back to /sys/fs/cgroup)
-if mount | grep -q '/run/cilium/cgroupv2 type cgroup2'; then
-    printf '%s' "/run/cilium/cgroupv2" > /tmp/cilium/config-map/cgroup-root
-else
-    printf '%s' "/sys/fs/cgroup" > /tmp/cilium/config-map/cgroup-root
-fi
+# Use the host's cgroup root determined in step 3
+printf '%s' "${CGROUP_ROOT}" > /tmp/cilium/config-map/cgroup-root
 
 # Create /host/proc symlink as safety net (some cilium code hardcodes /host/proc)
 ln -sfn /proc /host/proc 2>/dev/null || true
