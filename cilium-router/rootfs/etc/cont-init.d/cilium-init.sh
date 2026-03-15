@@ -38,12 +38,9 @@ if ! mount | grep -q '/sys/fs/bpf type bpf'; then
     }
 fi
 
-# ── 3. Mount cgroup v2 ──────────────────────────────────────────
-if ! mount | grep -q '/run/cilium/cgroupv2 type cgroup2'; then
-    bashio::log.info "Mounting cgroup v2..."
-    mount -t cgroup2 none /run/cilium/cgroupv2 2>/dev/null || \
-        bashio::log.warning "cgroup2 mount failed (may already be available)"
-fi
+# ── 3. Cgroup v2 ────────────────────────────────────────────────
+# We use the host's /sys/fs/cgroup (cgroup-root override in config).
+# No manual mount needed — the host already has cgroup v2 there.
 
 # ── 4. Load kernel modules + set sysctls ─────────────────────────
 bashio::log.info "Loading kernel modules..."
@@ -94,6 +91,9 @@ printf '%s' "/etc/cilium/kubeconfig" > /tmp/cilium/config-map/k8s-kubeconfig-pat
 # In the DaemonSet, host /proc is mounted at /host/proc. In our container,
 # /proc IS the host proc (privileged + host_network). Override procfs path.
 printf '%s' "/proc" > /tmp/cilium/config-map/procfs
+# Use the host's cgroup v2 root (not the container's) so socket LB BPF
+# programs intercept host processes. This is critical for ClusterIP services.
+printf '%s' "/sys/fs/cgroup" > /tmp/cilium/config-map/cgroup-root
 
 # Create /host/proc symlink as safety net (some cilium code hardcodes /host/proc)
 ln -sfn /proc /host/proc 2>/dev/null || true
