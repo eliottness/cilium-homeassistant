@@ -24,7 +24,12 @@ if ! kubectl cluster-info > /dev/null 2>&1; then
 fi
 bashio::log.info "Cluster connection OK"
 
-# ── 2. Mount BPF filesystem ─────────────────────────────────────
+# ── 2. Remount /proc/sys read-write (Docker mounts it ro by default) ──
+bashio::log.info "Remounting /proc/sys read-write..."
+mount -o remount,rw /proc/sys 2>/dev/null || \
+    bashio::log.warning "Failed to remount /proc/sys rw — cilium sysctl writes may fail"
+
+# ── 3. Mount BPF filesystem ─────────────────────────────────────
 if ! mount | grep -q '/sys/fs/bpf type bpf'; then
     bashio::log.info "Mounting BPF filesystem..."
     mount -t bpf bpf /sys/fs/bpf || {

@@ -28,7 +28,12 @@ if ! kubectl cluster-info > /dev/null 2>&1; then
 fi
 echo "[init] Cluster connection OK"
 
-# ── 2. Mount BPF filesystem ─────────────────────────────────────
+# ── 2. Remount /proc/sys read-write (Docker mounts it ro by default) ──
+echo "[init] Remounting /proc/sys read-write..."
+mount -o remount,rw /proc/sys 2>/dev/null || \
+    echo "[init] WARNING: Failed to remount /proc/sys rw"
+
+# ── 3. Mount BPF filesystem ─────────────────────────────────────
 if ! mount | grep -q '/sys/fs/bpf type bpf'; then
     echo "[init] Mounting BPF filesystem..."
     mount -t bpf bpf /sys/fs/bpf || {
