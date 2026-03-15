@@ -1,12 +1,14 @@
-# Stage 1: Cilium binaries from official image
+# Global args must be before the first FROM to be usable in FROM lines
 ARG CILIUM_VERSION=1.19.0
+ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
+
+# Stage 1: Cilium binaries from official image
 FROM quay.io/cilium/cilium:v${CILIUM_VERSION} AS cilium
 
 # Stage 2: kubectl
 FROM bitnami/kubectl:1.31 AS kubectl
 
 # Stage 3: Addon
-ARG BUILD_FROM
 FROM ${BUILD_FROM}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
