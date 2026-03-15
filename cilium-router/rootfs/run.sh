@@ -194,6 +194,4 @@ exec cilium-agent \
     --config-dir=/tmp/cilium/config-map \
     --bpf-root=/sys/fs/bpf \
     --state-dir=/var/run/cilium \
-    --lib-dir=/var/lib/cilium \
-    --log-driver=syslog \
-    --log-opt="level=${LOG_LEVEL}"
+    --lib-dir=/var/lib/cilium
