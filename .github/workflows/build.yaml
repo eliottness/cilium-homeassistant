@@ -24,10 +24,8 @@ jobs:
         include:
           - arch: aarch64
             platform: linux/arm64
-            build_from: ghcr.io/home-assistant/aarch64-base-debian:bookworm
           - arch: amd64
             platform: linux/amd64
-            build_from: ghcr.io/home-assistant/amd64-base-debian:bookworm
           # Mark 1.19.1 as default (gets the "latest" tag)
           - cilium_version: "1.19.1"
             is_default: true
@@ -80,7 +78,6 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.tags.outputs.tags }}
           build-args: |
-            BUILD_FROM=${{ matrix.build_from }}
             CILIUM_VERSION=${{ matrix.cilium_version }}
             BUILD_ARCH=${{ matrix.arch }}
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
