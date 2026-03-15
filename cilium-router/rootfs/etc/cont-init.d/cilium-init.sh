@@ -5,13 +5,14 @@ bashio::log.info "=== Cilium Router Addon Init ==="
 
 export NODE_NAME=$(bashio::config 'node_name')
 
-# ── 1. Write kubeconfig from addon configuration ─────────────────
-KUBECONFIG_CONTENT=$(bashio::config 'kubeconfig')
-if [ -z "${KUBECONFIG_CONTENT}" ]; then
-    bashio::log.fatal "No kubeconfig provided. Paste your kubeconfig in the addon Configuration tab."
+# ── 1. Copy kubeconfig from file path ────────────────────────────
+KUBECONFIG_PATH=$(bashio::config 'kubeconfig_path')
+if [ ! -f "${KUBECONFIG_PATH}" ]; then
+    bashio::log.fatal "Kubeconfig not found at ${KUBECONFIG_PATH}"
+    bashio::log.fatal "Place your kubeconfig file there via Samba, SSH, or File Editor addon."
     exit 1
 fi
-printf '%s' "${KUBECONFIG_CONTENT}" > /etc/cilium/kubeconfig
+cp "${KUBECONFIG_PATH}" /etc/cilium/kubeconfig
 chmod 600 /etc/cilium/kubeconfig
 export KUBECONFIG=/etc/cilium/kubeconfig
 

@@ -3,19 +3,20 @@ set -euo pipefail
 
 # ── Read addon options from /data/options.json ────────────────────
 OPTIONS_FILE="/data/options.json"
-KUBECONFIG_CONTENT=$(jq -r '.kubeconfig // ""' "${OPTIONS_FILE}")
+KUBECONFIG_PATH=$(jq -r '.kubeconfig_path // "/share/cilium/kubeconfig"' "${OPTIONS_FILE}")
 NODE_NAME=$(jq -r '.node_name // "ha-cilium"' "${OPTIONS_FILE}")
 LOG_LEVEL=$(jq -r '.log_level // "info"' "${OPTIONS_FILE}")
 
 echo "[init] === Cilium Router Addon Init ==="
 
-# ── 1. Write kubeconfig from addon configuration ─────────────────
-if [ -z "${KUBECONFIG_CONTENT}" ]; then
-    echo "[init] FATAL: No kubeconfig provided. Paste your kubeconfig in the addon Configuration tab."
+# ── 1. Copy kubeconfig from file path ────────────────────────────
+if [ ! -f "${KUBECONFIG_PATH}" ]; then
+    echo "[init] FATAL: Kubeconfig not found at ${KUBECONFIG_PATH}"
+    echo "[init] Place your kubeconfig file there via Samba, SSH, or File Editor addon."
     exit 1
 fi
 mkdir -p /etc/cilium
-printf '%s' "${KUBECONFIG_CONTENT}" > /etc/cilium/kubeconfig
+cp "${KUBECONFIG_PATH}" /etc/cilium/kubeconfig
 chmod 600 /etc/cilium/kubeconfig
 export KUBECONFIG=/etc/cilium/kubeconfig
 
