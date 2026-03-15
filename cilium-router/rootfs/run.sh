@@ -142,6 +142,8 @@ printf '%s' ""      > /tmp/cilium/config-map/write-cni-conf-when-ready
 printf '%s' "false" > /tmp/cilium/config-map/enable-health-check-nodeport
 printf '%s' "false" > /tmp/cilium/config-map/cni-exclusive
 printf '%s' "/etc/cilium/kubeconfig" > /tmp/cilium/config-map/k8s-kubeconfig-path
+# Enable ClusterIP access via TC/XDP datapath (only on THIS node, not cluster-wide)
+printf '%s' "true"  > /tmp/cilium/config-map/bpf-lb-external-clusterip
 # In our container, /proc IS the host proc (privileged + host_network)
 printf '%s' "/proc" > /tmp/cilium/config-map/procfs
 # Use the host's cgroup root determined in step 3

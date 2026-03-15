@@ -36,11 +36,9 @@ affinity:
         - matchExpressions:
             - key: node-role.kubernetes.io/cilium-router
               operator: DoesNotExist
-
-# Enable ClusterIP access from the HA machine via TC/XDP datapath
-bpf:
-  lbExternalClusterIP: true
 ```
+
+> **Note**: Do NOT set `bpf.lbExternalClusterIP: true` cluster-wide — it can break internal cluster traffic. The addon enables it only on the HA node automatically.
 
 Then upgrade Cilium:
 
@@ -116,6 +114,6 @@ HA Machine                          K8s Cluster
 ## Known limitations
 
 - **Prototype** — cilium-agent has never been officially tested without a kubelet. It works for routing but edge cases may exist.
-- **ClusterIP services require `bpf.lbExternalClusterIP: true`** in your Cilium Helm values. Without it, only pod IPs are reachable. See step 4 above.
+- **ClusterIP services** — the addon enables `bpf-lb-external-clusterip` on the HA node only. This uses the TC/XDP datapath for service resolution instead of socket LB (which requires host cgroup namespace access that HAOS blocks).
 - **No BTF on HAOS** — the Home Assistant OS kernel doesn't ship with `CONFIG_DEBUG_INFO_BTF`. Cilium falls back to legacy BPF probe mode which works but is slower to start.
 - **No pod scheduling** — the HA node is tainted `NoSchedule` + `NoExecute`. It only participates in routing.
