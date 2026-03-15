@@ -22,15 +22,7 @@ jobs:
         run: |
           # Get all Cilium release tags, find the latest patch for each minor
           VERSIONS=$(curl -s "https://api.github.com/repos/cilium/cilium/releases?per_page=100" \
-            | jq -r '
-              [.[] | select(.prerelease == false and .draft == false) | .tag_name | ltrimstr("v")]
-              | group_by(split(".")[0:2] | join("."))
-              | map(sort_by(split(".") | map(tonumber)) | last)
-              | sort_by(split(".") | map(tonumber))
-              | reverse
-              | .[0:4]
-              | reverse
-            ')
+            | jq -c '[.[] | select(.prerelease == false and .draft == false) | .tag_name | ltrimstr("v")] | group_by(split(".")[0:2] | join(".")) | map(sort_by(split(".") | map(tonumber)) | last) | sort_by(split(".") | map(tonumber)) | reverse | .[0:4] | reverse')
           echo "versions=${VERSIONS}" >> "$GITHUB_OUTPUT"
           echo "Discovered Cilium versions: ${VERSIONS}"
 
