@@ -86,6 +86,13 @@ printf '%s' "false" > /tmp/cilium/config-map/enable-health-check-nodeport
 printf '%s' "false" > /tmp/cilium/config-map/cni-exclusive
 # Point kubeconfig in the config
 printf '%s' "/etc/cilium/kubeconfig" > /tmp/cilium/config-map/k8s-kubeconfig-path
+# In the DaemonSet, host /proc is mounted at /host/proc. In our container,
+# /proc IS the host proc (privileged + host_network). Override procfs path.
+printf '%s' "/proc" > /tmp/cilium/config-map/procfs
+
+# Create /host/proc symlink as safety net (some cilium code hardcodes /host/proc)
+ln -sfn /proc /host/proc 2>/dev/null || true
+ln -sfn /sys /host/sys 2>/dev/null || true
 
 bashio::log.info "Config ready ($(ls /tmp/cilium/config-map | wc -l) keys)"
 

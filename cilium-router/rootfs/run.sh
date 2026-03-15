@@ -137,6 +137,12 @@ printf '%s' ""      > /tmp/cilium/config-map/write-cni-conf-when-ready
 printf '%s' "false" > /tmp/cilium/config-map/enable-health-check-nodeport
 printf '%s' "false" > /tmp/cilium/config-map/cni-exclusive
 printf '%s' "/etc/cilium/kubeconfig" > /tmp/cilium/config-map/k8s-kubeconfig-path
+# In our container, /proc IS the host proc (privileged + host_network)
+printf '%s' "/proc" > /tmp/cilium/config-map/procfs
+
+# Create /host/proc symlink as safety net (some cilium code hardcodes /host/proc)
+ln -sfn /proc /host/proc 2>/dev/null || true
+ln -sfn /sys /host/sys 2>/dev/null || true
 
 echo "[init] Config ready ($(ls /tmp/cilium/config-map | wc -l) keys)"
 
