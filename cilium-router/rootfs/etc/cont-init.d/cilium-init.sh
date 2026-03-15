@@ -1,5 +1,6 @@
 #!/usr/bin/with-contenv bashio
 set -euo pipefail
+export PATH="/usr/sbin:/sbin:$PATH"
 
 bashio::log.info "=== Cilium Router Addon Init ==="
 

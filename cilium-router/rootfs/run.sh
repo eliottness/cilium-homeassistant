@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+export PATH="/usr/sbin:/sbin:$PATH"
 
 # ── Read addon options from /data/options.json ────────────────────
 OPTIONS_FILE="/data/options.json"
