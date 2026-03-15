@@ -121,4 +121,21 @@ else
     bashio::log.warning "WireGuard module not found - encryption may fail"
 fi
 
-bashio::log.info "=== Init complete ==="
+bashio::log.info "=== Init complete, starting diagnostics in background ==="
+
+# ── 9. Background diagnostics (runs after agent starts) ─────────
+(
+    sleep 30
+    bashio::log.info "=== DIAGNOSTICS ==="
+    bashio::log.info "Cgroup mounts:"
+    mount | grep cgroup 2>&1 | while read -r line; do bashio::log.info "  ${line}"; done
+    bashio::log.info "Cgroup root content:"
+    ls /sys/fs/cgroup/ 2>&1 | head -20 | while read -r line; do bashio::log.info "  ${line}"; done
+    bashio::log.info "BPF cgroup programs:"
+    bpftool cgroup tree /sys/fs/cgroup/ 2>&1 | head -30 | while read -r line; do bashio::log.info "  ${line}"; done
+    bashio::log.info "Service list (first 20):"
+    cilium-dbg service list 2>&1 | head -20 | while read -r line; do bashio::log.info "  ${line}"; done
+    bashio::log.info "Service CIDR test:"
+    curl -m 3 -s "10.69.0.10:53" 2>&1 | head -5 | while read -r line; do bashio::log.info "  ${line}"; done
+    bashio::log.info "=== END DIAGNOSTICS ==="
+) &
