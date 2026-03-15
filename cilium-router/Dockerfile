@@ -5,15 +5,17 @@ ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 # Stage 1: Cilium binaries from official image
 FROM quay.io/cilium/cilium:v${CILIUM_VERSION} AS cilium
 
-# Stage 2: kubectl
-FROM bitnami/kubectl:1.31 AS kubectl
-
-# Stage 3: Addon
+# Stage 2: Addon
 FROM ${BUILD_FROM}
 
+# Install runtime deps + download kubectl
+ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash curl jq iproute2 iptables ip6tables ipset kmod \
     libelf1 mount wireguard-tools ca-certificates \
+    && KUBE_ARCH=$(echo "${TARGETARCH}" | sed 's/aarch64/arm64/') \
+    && curl -fsSL "https://dl.k8s.io/release/v1.32.3/bin/linux/${KUBE_ARCH}/kubectl" -o /usr/bin/kubectl \
+    && chmod +x /usr/bin/kubectl \
     && rm -rf /var/lib/apt/lists/*
 
 # Cilium agent + tools
@@ -26,9 +28,6 @@ COPY --from=cilium /usr/bin/cilium-sysctlfix /usr/bin/
 COPY --from=cilium /var/lib/cilium/bpf /var/lib/cilium/bpf
 # init-container.sh for clean-cilium-state
 COPY --from=cilium /init-container.sh /usr/local/bin/cilium-init-container.sh
-
-# kubectl
-COPY --from=kubectl /opt/bitnami/kubectl/bin/kubectl /usr/bin/
 
 # Addon overlay
 COPY rootfs /
