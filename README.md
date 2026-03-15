@@ -36,6 +36,10 @@ affinity:
         - matchExpressions:
             - key: node-role.kubernetes.io/cilium-router
               operator: DoesNotExist
+
+# Enable ClusterIP access from the HA machine via TC/XDP datapath
+bpf:
+  lbExternalClusterIP: true
 ```
 
 Then upgrade Cilium:
@@ -44,7 +48,24 @@ Then upgrade Cilium:
 helm upgrade cilium cilium/cilium -n kube-system -f values.yaml
 ```
 
-### 5. Start
+### 5. DNS (optional)
+
+HA runs its own CoreDNS at `172.30.32.3` which doesn't know about `cluster.local` domains. To resolve Kubernetes service names from HA, add your CoreDNS ClusterIP as a DNS server:
+
+**Option A**: Go to **Settings > System > Network > DNS** and add your CoreDNS ClusterIP (e.g., `10.85.0.10`) alongside your existing DNS server.
+
+**Option B**: Add a forward zone to the hassio_dns Corefile at `/usr/share/hassio/dns/coredns.tmpl` (via SSH addon):
+
+```
+cluster.local {
+    forward . 10.85.0.10
+    log
+}
+```
+
+Then restart DNS: `ha dns restart`
+
+### 6. Start
 
 Click **Start** and check the **Log** tab. You should see:
 - Cluster connectivity OK
@@ -102,6 +123,6 @@ HA Machine                          K8s Cluster
 ## Known limitations
 
 - **Prototype** — cilium-agent has never been officially tested without a kubelet. It works for routing but edge cases may exist.
-- **No ClusterIP services** — HAOS blocks access to the host's cgroup namespace (`--cgroupns=host` not available), so Cilium's BPF socket-level load balancing only works inside the addon container. Pod IPs work fine. You can reach cluster services by their pod IPs directly. We've filed a [proposal](https://github.com/eliottness/cilium-homeassistant/blob/main/proposal-cgroupns.md) to add `cgroup_namespace` support to the HA Supervisor.
+- **ClusterIP services require `bpf.lbExternalClusterIP: true`** in your Cilium Helm values. Without it, only pod IPs are reachable. See step 4 above.
 - **No BTF on HAOS** — the Home Assistant OS kernel doesn't ship with `CONFIG_DEBUG_INFO_BTF`. Cilium falls back to legacy BPF probe mode which works but is slower to start.
 - **No pod scheduling** — the HA node is tainted `NoSchedule` + `NoExecute`. It only participates in routing.
