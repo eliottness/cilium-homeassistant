@@ -1,0 +1,4 @@
+.omc/
+.claude/
+cilium/
+values.yaml

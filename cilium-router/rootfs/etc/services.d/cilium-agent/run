@@ -1,0 +1,24 @@
+#!/usr/bin/with-contenv bashio
+
+NODE_NAME=$(bashio::config 'node_name')
+LOG_LEVEL=$(bashio::config 'log_level')
+
+# Environment the agent expects (from DaemonSet template)
+export K8S_NODE_NAME="${NODE_NAME}"
+export CILIUM_K8S_NAMESPACE="kube-system"
+# API server coordinates (from values.yaml k8sServiceHost/Port)
+export KUBERNETES_SERVICE_HOST="$(cat /tmp/cilium/config-map/k8s-service-host 2>/dev/null || echo '192.168.1.37')"
+export KUBERNETES_SERVICE_PORT="$(cat /tmp/cilium/config-map/k8s-service-port 2>/dev/null || echo '6443')"
+
+bashio::log.info "Starting cilium-agent as node '${NODE_NAME}'..."
+bashio::log.info "  API server: ${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}"
+
+# --config-dir contains the real cilium-config ConfigMap (from build-config)
+# plus our minimal overrides. The agent reads all config from there.
+exec cilium-agent \
+    --config-dir=/tmp/cilium/config-map \
+    --bpf-root=/sys/fs/bpf \
+    --state-dir=/var/run/cilium \
+    --lib-dir=/var/lib/cilium \
+    --log-driver=syslog \
+    --log-opt="level=${LOG_LEVEL}"
