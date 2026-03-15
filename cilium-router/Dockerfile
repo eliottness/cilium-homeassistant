@@ -11,7 +11,7 @@ FROM ${BUILD_FROM}
 # Install runtime deps + download kubectl
 ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash curl jq iproute2 iptables ip6tables ipset kmod \
+    bash curl jq iproute2 iptables ipset kmod \
     libelf1 mount wireguard-tools ca-certificates \
     && KUBE_ARCH=$(echo "${TARGETARCH}" | sed 's/aarch64/arm64/') \
     && curl -fsSL "https://dl.k8s.io/release/v1.32.3/bin/linux/${KUBE_ARCH}/kubectl" -o /usr/bin/kubectl \
