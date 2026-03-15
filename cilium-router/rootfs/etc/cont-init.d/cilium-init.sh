@@ -63,7 +63,7 @@ export KUBERNETES_SERVICE_PORT="$(kubectl config view --minify -o jsonpath='{.cl
 
 cilium-dbg build-config \
     --k8s-kubeconfig-path=/etc/cilium/kubeconfig \
-    --config-dir=/tmp/cilium/config-map \
+    --dest=/tmp/cilium/config-map \
     2>&1 || {
     bashio::log.warning "cilium-dbg build-config failed, falling back to manual ConfigMap dump..."
     # Fallback: manually dump ConfigMap as files

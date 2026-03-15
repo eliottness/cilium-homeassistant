@@ -116,7 +116,7 @@ mkdir -p /tmp/cilium/config-map
 
 cilium-dbg build-config \
     --k8s-kubeconfig-path=/etc/cilium/kubeconfig \
-    --config-dir=/tmp/cilium/config-map \
+    --dest=/tmp/cilium/config-map \
     2>&1 || {
     echo "[init] WARNING: cilium-dbg build-config failed, falling back to manual ConfigMap dump..."
     kubectl get configmap cilium-config -n kube-system -o json \
