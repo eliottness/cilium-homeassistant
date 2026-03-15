@@ -12,7 +12,6 @@ init: false
 
 # Full network + BPF access (matches DaemonSet security context)
 host_network: true
-host_pid: true
 privileged:
   - NET_ADMIN
   - NET_RAW
@@ -22,7 +21,6 @@ privileged:
   - DAC_READ_SEARCH
 apparmor: false
 full_access: true   # Needed for /sys/fs/bpf, /lib/modules, /proc/sys
-docker_api: true    # Needed to mount host cgroup via nsenter + docker
 
 image: "ghcr.io/eliottness/cilium-homeassistant/{arch}-cilium-router"
 

@@ -1,6 +1,6 @@
 # Cilium Router for Home Assistant
 
-A Home Assistant addon that runs Cilium agent to make your Home Assistant machine part of a Kubernetes cluster's network. Pods become directly reachable from your HA machine via Cilium's WireGuard + VXLAN tunnels.
+A Home Assistant addon that runs Cilium agent to make your Home Assistant machine part of a Kubernetes cluster's network. Pods and ClusterIP services become directly reachable from your HA machine. This Home Assistant app exist because the now-removed feature of cilium "External Workloads" is gone.
 
 ## How it works
 
@@ -18,12 +18,11 @@ https://github.com/eliottness/cilium-homeassistant
 
 ### 2. Install the addon
 
-Find **Cilium Router** in the store and click **Install**.
+Find **Cilium Router** in the store and click **Install**. Then toggle off the **Protection Mode** button.
 
 ### 3. Configure
 
-1. Go to the addon's **Configuration** tab and turn off **Protection Mode** (it's on by default and prevents the privileged access Cilium needs).
-2. Place your kubeconfig file at `/config/kubeconfig` (editable via the **File Editor** or **SSH** addon). The kubeconfig needs at least the `cilium` ClusterRole permissions (or `cluster-admin` for prototyping).
+Place your kubeconfig file at `/config/kubeconfig` (editable via the **File Editor** or **SSH** addon). The kubeconfig needs at least the `cilium` ClusterRole permissions (or `cluster-admin` for prototyping).
 
 ### 4. Exclude the HA node from Cilium DaemonSet
 
@@ -49,11 +48,9 @@ helm upgrade cilium cilium/cilium -n kube-system -f values.yaml
 
 Click **Start** and check the **Log** tab. You should see:
 - Cluster connectivity OK
-- `/proc/sys` remounted read-write
-- BPF filesystem mounted
 - Node created
 - Cilium config fetched (160+ keys)
-- Agent starting with WireGuard peers
+- Agent starting
 
 ### 6. Verify
 
@@ -77,7 +74,7 @@ ping <any-pod-ip>
 ## Requirements
 
 - Home Assistant OS 13+ (kernel 6.1+ with eBPF and WireGuard support)
-- k3s cluster with Cilium 1.19+ (tunnel mode, WireGuard encryption)
+- A cluster with Cilium 1.19+ (tested in tunnel mode, WireGuard encryption)
 - A kubeconfig with sufficient RBAC permissions
 
 ## Configuration
@@ -93,8 +90,8 @@ ping <any-pod-ip>
 ```
 HA Machine                          K8s Cluster
 ┌──────────────────┐               ┌──────────────────┐
-│ cilium-agent     │◄──WireGuard──►│ cilium-agent     │
-│  ├ cilium_wg0    │   (UDP 51871) │  ├ cilium_wg0    │
+│ cilium-agent     │◄──   VXLAN ──►│ cilium-agent     │
+│  ├ cilium_wg0    │               │  ├ cilium_wg0    │
 │  ├ cilium_vxlan  │               │  ├ cilium_vxlan  │
 │  └ BPF programs  │               │  └ BPF programs  │
 │                  │               │                  │
@@ -105,6 +102,6 @@ HA Machine                          K8s Cluster
 ## Known limitations
 
 - **Prototype** — cilium-agent has never been officially tested without a kubelet. It works for routing but edge cases may exist.
+- **No ClusterIP services** — HAOS blocks access to the host's cgroup namespace (`--cgroupns=host` not available), so Cilium's BPF socket-level load balancing only works inside the addon container. Pod IPs work fine. You can reach cluster services by their pod IPs directly. We've filed a [proposal](https://github.com/eliottness/cilium-homeassistant/blob/main/proposal-cgroupns.md) to add `cgroup_namespace` support to the HA Supervisor.
 - **No BTF on HAOS** — the Home Assistant OS kernel doesn't ship with `CONFIG_DEBUG_INFO_BTF`. Cilium falls back to legacy BPF probe mode which works but is slower to start.
-- **DNS resolution** — ClusterIP services (like CoreDNS) may not work as the HA machine's DNS server. Use pod IPs directly or set up a DNS forwarder.
 - **No pod scheduling** — the HA node is tainted `NoSchedule` + `NoExecute`. It only participates in routing.
