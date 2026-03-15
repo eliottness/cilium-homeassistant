@@ -22,6 +22,7 @@ privileged:
   - DAC_READ_SEARCH
 apparmor: false
 full_access: true   # Needed for /sys/fs/bpf, /lib/modules, /proc/sys
+docker_api: true    # Needed to mount host cgroup via nsenter + docker
 
 image: "ghcr.io/eliottness/cilium-homeassistant/{arch}-cilium-router"
 

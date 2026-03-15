@@ -43,40 +43,66 @@ if ! mount | grep -q '/sys/fs/bpf type bpf'; then
 fi
 
 # ── 3. Host cgroup v2 (critical for socket LB) ──────────────────
-# The DaemonSet uses nsenter to mount cgroup2 ON THE HOST, then a hostPath
-# volume to access it. We replicate: nsenter to mount on host, then
-# bind-mount /proc/1/root/... into our namespace.
+# Inspired by the netdata HA addon approach: use nsenter into PID 1's
+# mount namespace + docker CLI to mount host cgroup into our container
+# from the outside, then restart ourselves so the mount is visible.
+# See: https://github.com/felipecrs/netdata-hass-addon
 CGROUP_ROOT="/run/cilium/cgroupv2"
-mkdir -p "${CGROUP_ROOT}"
+CGROUP_MARKER="/var/run/cilium/.cgroup-mounted"
 
-echo "[init] Step 3a: Creating cgroup2 mount on HOST via nsenter..."
-# Create directory on the HOST (not just in the container)
-nsenter --cgroup=/proc/1/ns/cgroup --mount=/proc/1/ns/mnt -- \
-    mkdir -p /run/cilium/cgroupv2 2>&1 || echo "[init]   mkdir on host failed (may already exist)"
-
-# Mount cgroup2 on the HOST if not already mounted
-nsenter --cgroup=/proc/1/ns/cgroup --mount=/proc/1/ns/mnt -- \
-    sh -c 'mount | grep -q "/run/cilium/cgroupv2 type cgroup2" || mount -t cgroup2 none /run/cilium/cgroupv2' 2>&1 || {
-    echo "[init]   mount via sh failed, trying cilium-mount..."
-    nsenter --cgroup=/proc/1/ns/cgroup --mount=/proc/1/ns/mnt -- \
-        /usr/bin/cilium-mount /run/cilium/cgroupv2 2>&1 || echo "[init]   cilium-mount also failed"
-}
-
-echo "[init] Step 3b: Bind-mounting host cgroup2 into container..."
-# Bind-mount the HOST's cgroup2 into our mount namespace
-if mount --bind /proc/1/root/run/cilium/cgroupv2 /run/cilium/cgroupv2 2>&1; then
-    echo "[init] Host cgroup2 bind-mounted at ${CGROUP_ROOT}"
-    # Verify it's the host's root cgroup (should have many subdirs)
-    echo "[init]   Contents: $(ls /run/cilium/cgroupv2/ 2>/dev/null | head -10)"
+if [ -f "${CGROUP_MARKER}" ]; then
+    echo "[init] Host cgroup already mounted from previous run"
 else
-    echo "[init] WARNING: Bind-mount failed. Trying direct /proc/1/root path..."
-    if [ -d /proc/1/root/sys/fs/cgroup/system.slice ]; then
-        CGROUP_ROOT="/proc/1/root/sys/fs/cgroup"
-        echo "[init]   Using ${CGROUP_ROOT} (host cgroup via procfs)"
-    else
-        CGROUP_ROOT="/sys/fs/cgroup"
-        echo "[init]   FALLBACK: Using container cgroup. ClusterIP services will NOT work outside this container."
+    echo "[init] Mounting host cgroup v2 via nsenter + docker..."
+
+    # Find our container ID from /proc/self/mountinfo
+    CONTAINER_ID=$(sed -n 's|.*docker/containers/\([a-f0-9]*\)/.*|\1|p' /proc/self/mountinfo | head -1)
+    if [ -z "${CONTAINER_ID}" ]; then
+        # Fallback: try cgroup path
+        CONTAINER_ID=$(sed -n 's|.*/docker-\([a-f0-9]*\)\.scope.*|\1|p' /proc/self/cgroup | head -1)
     fi
+
+    if [ -n "${CONTAINER_ID}" ]; then
+        echo "[init]   Container ID: ${CONTAINER_ID:0:12}"
+
+        # Get the container's merged filesystem path on the host
+        MERGED_DIR=$(docker inspect --format '{{.GraphDriver.Data.MergedDir}}' "${CONTAINER_ID}" 2>/dev/null)
+
+        if [ -n "${MERGED_DIR}" ]; then
+            echo "[init]   Merged dir: ${MERGED_DIR}"
+
+            # Use nsenter into host's mount namespace to bind-mount host cgroup
+            # into our container's filesystem from the outside
+            nsenter --target 1 --mount -- \
+                mkdir -p "${MERGED_DIR}${CGROUP_ROOT}" 2>/dev/null
+
+            nsenter --target 1 --mount -- \
+                mount --bind --read-only /sys/fs/cgroup "${MERGED_DIR}${CGROUP_ROOT}" 2>&1 && {
+                echo "[init]   Host cgroup mounted into container overlay"
+
+                # Mark that we mounted it, then restart ourselves
+                # so the mount becomes visible inside the container
+                mkdir -p "$(dirname "${CGROUP_MARKER}")"
+                touch "${CGROUP_MARKER}"
+
+                echo "[init]   Restarting container to pick up the mount..."
+                docker restart "${CONTAINER_ID}" &
+                # Give docker time to send the signal, then exit
+                sleep 5
+                exit 0
+            } || {
+                echo "[init]   WARNING: nsenter mount failed"
+            }
+        else
+            echo "[init]   WARNING: Could not get container merged dir"
+        fi
+    else
+        echo "[init]   WARNING: Could not determine container ID"
+    fi
+
+    # Fallback
+    CGROUP_ROOT="/sys/fs/cgroup"
+    echo "[init]   FALLBACK: Using container cgroup at ${CGROUP_ROOT}"
 fi
 
 # ── 4. Set sysctls ──────────────────────────────────────────────
@@ -201,64 +227,6 @@ fi
 
 echo "[init] === Init complete, starting services ==="
 
-# ── 9. iptables service DNAT (workaround: cgroup socket LB can't reach host) ─
-# The HA Supervisor blocks /proc/1/ns/cgroup access, so BPF socket LB only
-# works inside this container. As a workaround, we generate iptables DNAT
-# rules for ClusterIP services so host processes can reach them.
-(
-    sleep 60  # wait for agent to sync services
-    echo "[svc-sync] === Starting iptables service sync ==="
-    # Create a custom chain for our rules
-    iptables -t nat -N CILIUM_HA_SERVICES 2>/dev/null || iptables -t nat -F CILIUM_HA_SERVICES
-    # OUTPUT: locally-originated traffic (from host processes)
-    iptables -t nat -C OUTPUT -j CILIUM_HA_SERVICES 2>/dev/null || \
-        iptables -t nat -I OUTPUT -j CILIUM_HA_SERVICES
-    # PREROUTING: traffic from other containers (Docker bridge → host)
-    iptables -t nat -C PREROUTING -j CILIUM_HA_SERVICES 2>/dev/null || \
-        iptables -t nat -I PREROUTING -j CILIUM_HA_SERVICES
-
-    while true; do
-        # Get service list from cilium and generate DNAT rules
-        RULES_FILE=$(mktemp)
-        cilium-dbg service list 2>/dev/null | grep "ClusterIP" | while IFS= read -r line; do
-            # Parse: ID  frontend_ip:port/proto  ClusterIP  N => backend_ip:port/proto (active)
-            # Fields: $1=ID $2=frontend $3=type $4=count $5==> $6=backend
-            FRONTEND=$(echo "$line" | awk '{print $2}')
-            BACKEND=$(echo "$line" | awk '{print $6}')
-            [ -z "$FRONTEND" ] || [ -z "$BACKEND" ] && continue
-
-            SVC_IP=$(echo "$FRONTEND" | cut -d: -f1)
-            SVC_PORT=$(echo "$FRONTEND" | cut -d: -f2 | cut -d/ -f1)
-            PROTO=$(echo "$FRONTEND" | grep -o '/[A-Z]*' | tr -d '/' | tr 'A-Z' 'a-z')
-            BACK_IP=$(echo "$BACKEND" | cut -d: -f1)
-            BACK_PORT=$(echo "$BACKEND" | cut -d: -f2 | cut -d/ -f1)
-
-            [ -z "$SVC_IP" ] || [ -z "$SVC_PORT" ] || [ -z "$PROTO" ] || [ -z "$BACK_IP" ] || [ -z "$BACK_PORT" ] && continue
-            echo "-A CILIUM_HA_SERVICES -d ${SVC_IP}/32 -p ${PROTO} --dport ${SVC_PORT} -j DNAT --to-destination ${BACK_IP}:${BACK_PORT}" >> "$RULES_FILE"
-        done
-
-        # Debug: show first parsed rule
-        if [ -s "$RULES_FILE" ]; then
-            echo "[svc-sync] First rule: $(head -1 "$RULES_FILE")"
-        else
-            echo "[svc-sync] WARNING: No rules generated. Service count: $(cilium-dbg service list 2>/dev/null | grep -c ClusterIP)"
-        fi
-
-        # Atomically replace rules
-        RULE_COUNT=$(wc -l < "$RULES_FILE" 2>/dev/null || echo 0)
-        iptables -t nat -F CILIUM_HA_SERVICES 2>/dev/null
-        if [ "$RULE_COUNT" -gt 0 ]; then
-            while IFS= read -r rule; do
-                iptables -t nat $rule 2>/dev/null
-            done < "$RULES_FILE"
-            echo "[svc-sync] Synced ${RULE_COUNT} iptables DNAT rules for ClusterIP services"
-        fi
-        rm -f "$RULES_FILE"
-
-        sleep 30  # resync every 30s
-    done
-) &
-echo "[svc-sync] Service iptables sync started in background"
 
 # ── Start node heartbeat in background ───────────────────────────
 (
