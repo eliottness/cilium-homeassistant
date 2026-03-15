@@ -22,7 +22,8 @@ Find **Cilium Router** in the store and click **Install**.
 
 ### 3. Configure
 
-Place your kubeconfig file at `/config/kubeconfig` (editable via the **File Editor** or **SSH** addon). The kubeconfig needs at least the `cilium` ClusterRole permissions (or `cluster-admin` for prototyping).
+1. Go to the addon's **Configuration** tab and turn off **Protection Mode** (it's on by default and prevents the privileged access Cilium needs).
+2. Place your kubeconfig file at `/config/kubeconfig` (editable via the **File Editor** or **SSH** addon). The kubeconfig needs at least the `cilium` ClusterRole permissions (or `cluster-admin` for prototyping).
 
 ### 4. Exclude the HA node from Cilium DaemonSet
 
