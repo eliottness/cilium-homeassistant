@@ -201,22 +201,52 @@ fi
 
 echo "[init] === Init complete, starting services ==="
 
-# ── 9. Background diagnostics (runs after agent starts) ─────────
+# ── 9. iptables service DNAT (workaround: cgroup socket LB can't reach host) ─
+# The HA Supervisor blocks /proc/1/ns/cgroup access, so BPF socket LB only
+# works inside this container. As a workaround, we generate iptables DNAT
+# rules for ClusterIP services so host processes can reach them.
 (
-    sleep 45
-    echo "[diag] === DIAGNOSTICS ==="
-    echo "[diag] Cgroup mounts:"
-    mount | grep cgroup 2>&1 | while read -r line; do echo "[diag]   ${line}"; done
-    echo "[diag] Cgroup root config: $(cat /tmp/cilium/config-map/cgroup-root 2>/dev/null)"
-    echo "[diag] BPF cgroup programs:"
-    bpftool cgroup tree "$(cat /tmp/cilium/config-map/cgroup-root 2>/dev/null || echo /sys/fs/cgroup)" 2>&1 | head -30 | while read -r line; do echo "[diag]   ${line}"; done
-    echo "[diag] Service list (first 20):"
-    cilium-dbg service list 2>&1 | head -20 | while read -r line; do echo "[diag]   ${line}"; done
-    echo "[diag] Pod connectivity test:"
-    FIRST_SVC=$(cilium-dbg service list 2>/dev/null | grep ClusterIP | head -1)
-    echo "[diag]   First ClusterIP service: ${FIRST_SVC}"
-    echo "[diag] === END DIAGNOSTICS ==="
+    sleep 60  # wait for agent to sync services
+    echo "[svc-sync] === Starting iptables service sync ==="
+    # Create a custom chain for our rules
+    iptables -t nat -N CILIUM_HA_SERVICES 2>/dev/null || iptables -t nat -F CILIUM_HA_SERVICES
+    iptables -t nat -C OUTPUT -j CILIUM_HA_SERVICES 2>/dev/null || \
+        iptables -t nat -I OUTPUT -j CILIUM_HA_SERVICES
+
+    while true; do
+        # Get service list from cilium and generate DNAT rules
+        RULES_FILE=$(mktemp)
+        cilium-dbg service list 2>/dev/null | grep "ClusterIP" | while IFS= read -r line; do
+            # Parse: ID  frontend_ip:port/proto  ClusterIP  N => backend_ip:port/proto (active)
+            FRONTEND=$(echo "$line" | awk '{print $2}')
+            BACKEND=$(echo "$line" | awk '{print $5}')
+            [ -z "$FRONTEND" ] || [ -z "$BACKEND" ] && continue
+
+            SVC_IP=$(echo "$FRONTEND" | cut -d: -f1)
+            SVC_PORT=$(echo "$FRONTEND" | cut -d: -f2 | cut -d/ -f1)
+            PROTO=$(echo "$FRONTEND" | grep -o '/[A-Z]*' | tr -d '/' | tr 'A-Z' 'a-z')
+            BACK_IP=$(echo "$BACKEND" | cut -d: -f1)
+            BACK_PORT=$(echo "$BACKEND" | cut -d: -f2 | cut -d/ -f1)
+
+            [ -z "$SVC_IP" ] || [ -z "$SVC_PORT" ] || [ -z "$PROTO" ] || [ -z "$BACK_IP" ] || [ -z "$BACK_PORT" ] && continue
+            echo "-A CILIUM_HA_SERVICES -d ${SVC_IP}/32 -p ${PROTO} --dport ${SVC_PORT} -j DNAT --to-destination ${BACK_IP}:${BACK_PORT}" >> "$RULES_FILE"
+        done
+
+        # Atomically replace rules
+        RULE_COUNT=$(wc -l < "$RULES_FILE" 2>/dev/null || echo 0)
+        iptables -t nat -F CILIUM_HA_SERVICES 2>/dev/null
+        if [ "$RULE_COUNT" -gt 0 ]; then
+            while IFS= read -r rule; do
+                iptables -t nat $rule 2>/dev/null
+            done < "$RULES_FILE"
+            echo "[svc-sync] Synced ${RULE_COUNT} iptables DNAT rules for ClusterIP services"
+        fi
+        rm -f "$RULES_FILE"
+
+        sleep 30  # resync every 30s
+    done
 ) &
+echo "[svc-sync] Service iptables sync started in background"
 
 # ── Start node heartbeat in background ───────────────────────────
 (
