@@ -210,8 +210,12 @@ echo "[init] === Init complete, starting services ==="
     echo "[svc-sync] === Starting iptables service sync ==="
     # Create a custom chain for our rules
     iptables -t nat -N CILIUM_HA_SERVICES 2>/dev/null || iptables -t nat -F CILIUM_HA_SERVICES
+    # OUTPUT: locally-originated traffic (from host processes)
     iptables -t nat -C OUTPUT -j CILIUM_HA_SERVICES 2>/dev/null || \
         iptables -t nat -I OUTPUT -j CILIUM_HA_SERVICES
+    # PREROUTING: traffic from other containers (Docker bridge → host)
+    iptables -t nat -C PREROUTING -j CILIUM_HA_SERVICES 2>/dev/null || \
+        iptables -t nat -I PREROUTING -j CILIUM_HA_SERVICES
 
     while true; do
         # Get service list from cilium and generate DNAT rules
