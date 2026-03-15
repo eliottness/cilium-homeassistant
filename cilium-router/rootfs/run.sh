@@ -43,14 +43,40 @@ if ! mount | grep -q '/sys/fs/bpf type bpf'; then
 fi
 
 # ── 3. Host cgroup v2 (critical for socket LB) ──────────────────
-# With host_pid: true, /proc/1/root/sys/fs/cgroup IS the host's
-# real cgroup2 hierarchy. Point cgroup-root there directly.
-if [ -d /proc/1/root/sys/fs/cgroup ]; then
-    echo "[init] Host cgroup v2 accessible at /proc/1/root/sys/fs/cgroup"
-    CGROUP_ROOT="/proc/1/root/sys/fs/cgroup"
+# The DaemonSet uses nsenter to mount cgroup2 ON THE HOST, then a hostPath
+# volume to access it. We replicate: nsenter to mount on host, then
+# bind-mount /proc/1/root/... into our namespace.
+CGROUP_ROOT="/run/cilium/cgroupv2"
+mkdir -p "${CGROUP_ROOT}"
+
+echo "[init] Step 3a: Creating cgroup2 mount on HOST via nsenter..."
+# Create directory on the HOST (not just in the container)
+nsenter --cgroup=/proc/1/ns/cgroup --mount=/proc/1/ns/mnt -- \
+    mkdir -p /run/cilium/cgroupv2 2>&1 || echo "[init]   mkdir on host failed (may already exist)"
+
+# Mount cgroup2 on the HOST if not already mounted
+nsenter --cgroup=/proc/1/ns/cgroup --mount=/proc/1/ns/mnt -- \
+    sh -c 'mount | grep -q "/run/cilium/cgroupv2 type cgroup2" || mount -t cgroup2 none /run/cilium/cgroupv2' 2>&1 || {
+    echo "[init]   mount via sh failed, trying cilium-mount..."
+    nsenter --cgroup=/proc/1/ns/cgroup --mount=/proc/1/ns/mnt -- \
+        /usr/bin/cilium-mount /run/cilium/cgroupv2 2>&1 || echo "[init]   cilium-mount also failed"
+}
+
+echo "[init] Step 3b: Bind-mounting host cgroup2 into container..."
+# Bind-mount the HOST's cgroup2 into our mount namespace
+if mount --bind /proc/1/root/run/cilium/cgroupv2 /run/cilium/cgroupv2 2>&1; then
+    echo "[init] Host cgroup2 bind-mounted at ${CGROUP_ROOT}"
+    # Verify it's the host's root cgroup (should have many subdirs)
+    echo "[init]   Contents: $(ls /run/cilium/cgroupv2/ 2>/dev/null | head -10)"
 else
-    echo "[init] WARNING: Host cgroup not accessible, falling back to /sys/fs/cgroup"
-    CGROUP_ROOT="/sys/fs/cgroup"
+    echo "[init] WARNING: Bind-mount failed. Trying direct /proc/1/root path..."
+    if [ -d /proc/1/root/sys/fs/cgroup/system.slice ]; then
+        CGROUP_ROOT="/proc/1/root/sys/fs/cgroup"
+        echo "[init]   Using ${CGROUP_ROOT} (host cgroup via procfs)"
+    else
+        CGROUP_ROOT="/sys/fs/cgroup"
+        echo "[init]   FALLBACK: Using container cgroup. ClusterIP services will NOT work outside this container."
+    fi
 fi
 
 # ── 4. Set sysctls ──────────────────────────────────────────────
