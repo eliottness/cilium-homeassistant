@@ -218,8 +218,9 @@ echo "[init] === Init complete, starting services ==="
         RULES_FILE=$(mktemp)
         cilium-dbg service list 2>/dev/null | grep "ClusterIP" | while IFS= read -r line; do
             # Parse: ID  frontend_ip:port/proto  ClusterIP  N => backend_ip:port/proto (active)
+            # Fields: $1=ID $2=frontend $3=type $4=count $5==> $6=backend
             FRONTEND=$(echo "$line" | awk '{print $2}')
-            BACKEND=$(echo "$line" | awk '{print $5}')
+            BACKEND=$(echo "$line" | awk '{print $6}')
             [ -z "$FRONTEND" ] || [ -z "$BACKEND" ] && continue
 
             SVC_IP=$(echo "$FRONTEND" | cut -d: -f1)
@@ -231,6 +232,13 @@ echo "[init] === Init complete, starting services ==="
             [ -z "$SVC_IP" ] || [ -z "$SVC_PORT" ] || [ -z "$PROTO" ] || [ -z "$BACK_IP" ] || [ -z "$BACK_PORT" ] && continue
             echo "-A CILIUM_HA_SERVICES -d ${SVC_IP}/32 -p ${PROTO} --dport ${SVC_PORT} -j DNAT --to-destination ${BACK_IP}:${BACK_PORT}" >> "$RULES_FILE"
         done
+
+        # Debug: show first parsed rule
+        if [ -s "$RULES_FILE" ]; then
+            echo "[svc-sync] First rule: $(head -1 "$RULES_FILE")"
+        else
+            echo "[svc-sync] WARNING: No rules generated. Service count: $(cilium-dbg service list 2>/dev/null | grep -c ClusterIP)"
+        fi
 
         # Atomically replace rules
         RULE_COUNT=$(wc -l < "$RULES_FILE" 2>/dev/null || echo 0)
