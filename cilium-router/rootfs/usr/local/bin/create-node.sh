@@ -2,16 +2,16 @@
 set -euo pipefail
 
 export KUBECONFIG=/etc/cilium/kubeconfig
-NODE_NAME=$(bashio::config 'node_name' 2>/dev/null || echo "ha-cilium")
+NODE_NAME="${NODE_NAME:-ha-cilium}"
 NODE_IP=$(ip route get 1.1.1.1 | awk '{print $7; exit}')
 ARCH=$(uname -m)
 [ "$ARCH" = "aarch64" ] && ARCH="arm64"
 [ "$ARCH" = "x86_64" ] && ARCH="amd64"
 
 if kubectl get node "${NODE_NAME}" > /dev/null 2>&1; then
-    bashio::log.info "Node '${NODE_NAME}' already exists"
+    echo "[node] Node '${NODE_NAME}' already exists"
 else
-    bashio::log.info "Creating Node '${NODE_NAME}' at ${NODE_IP}..."
+    echo "[node] Creating Node '${NODE_NAME}' at ${NODE_IP}..."
     cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Node
@@ -62,4 +62,4 @@ kubectl patch node "${NODE_NAME}" \
   }
 }" 2>/dev/null || true
 
-bashio::log.info "Node '${NODE_NAME}' ready at ${NODE_IP}"
+echo "[node] Node '${NODE_NAME}' ready at ${NODE_IP}"

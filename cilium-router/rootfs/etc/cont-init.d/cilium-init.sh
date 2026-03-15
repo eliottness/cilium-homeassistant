@@ -3,7 +3,7 @@ set -euo pipefail
 
 bashio::log.info "=== Cilium Router Addon Init ==="
 
-NODE_NAME=$(bashio::config 'node_name')
+export NODE_NAME=$(bashio::config 'node_name')
 
 # ── 1. Write kubeconfig from addon configuration ─────────────────
 KUBECONFIG_CONTENT=$(bashio::config 'kubeconfig')
