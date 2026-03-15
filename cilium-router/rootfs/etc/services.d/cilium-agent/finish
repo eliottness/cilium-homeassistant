@@ -1,2 +1,0 @@
-#!/usr/bin/with-contenv bashio
-bashio::log.warning "cilium-agent stopped (exit code: ${1})"

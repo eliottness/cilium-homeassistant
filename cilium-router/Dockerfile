@@ -17,8 +17,7 @@ RUN cp /init-container.sh /usr/local/bin/cilium-init-container.sh 2>/dev/null ||
 # Addon overlay
 COPY rootfs /
 
-RUN chmod +x /run.sh \
-    && chmod +x /usr/local/bin/*.sh 2>/dev/null || true
+RUN chmod +x /run.sh
 
 RUN mkdir -p /var/run/cilium /var/lib/cilium /etc/cilium \
     /tmp/cilium/config-map /run/cilium/cgroupv2 /data
