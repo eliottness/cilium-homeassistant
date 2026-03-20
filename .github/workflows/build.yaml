@@ -12,22 +12,21 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  discover-cilium-versions:
+  discover-cilium-latest:
     runs-on: ubuntu-latest
     outputs:
-      versions: ${{ steps.versions.outputs.versions }}
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Fetch last 4 Cilium minor versions (latest patch each)
-        id: versions
+      - name: Fetch latest stable Cilium version
+        id: version
         run: |
-          # Get all Cilium release tags, find the latest patch for each minor
-          VERSIONS=$(curl -s "https://api.github.com/repos/cilium/cilium/releases?per_page=100" \
-            | jq -c '[.[] | select(.prerelease == false and .draft == false) | .tag_name | ltrimstr("v")] | group_by(split(".")[0:2] | join(".")) | map(sort_by(split(".") | map(tonumber)) | last) | sort_by(split(".") | map(tonumber)) | reverse | .[0:4] | reverse')
-          echo "versions=${VERSIONS}" >> "$GITHUB_OUTPUT"
-          echo "Discovered Cilium versions: ${VERSIONS}"
+          VERSION=$(curl -s "https://api.github.com/repos/cilium/cilium/releases?per_page=20" \
+            | jq -r '[.[] | select(.prerelease == false and .draft == false) | .tag_name | ltrimstr("v")] | sort_by(split(".") | map(tonumber)) | last')
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Latest Cilium: ${VERSION}"
 
   build:
-    needs: discover-cilium-versions
+    needs: discover-cilium-latest
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,7 +34,6 @@ jobs:
     strategy:
       matrix:
         arch: [aarch64, amd64]
-        cilium_version: ${{ fromJson(needs.discover-cilium-versions.outputs.versions) }}
         include:
           - arch: aarch64
             platform: linux/arm64
@@ -59,7 +57,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Extract version from config.yaml
-        id: version
+        id: addon_version
         run: |
           VERSION=$(grep '^version:' cilium-router/config.yaml | awk '{print $2}' | tr -d '"')
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
@@ -77,15 +75,16 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/cilium-homeassistant/${{ matrix.arch }}-cilium-router:${{ steps.version.outputs.tag }}-cilium${{ matrix.cilium_version }}
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/cilium-homeassistant/${{ matrix.arch }}-cilium-router:${{ steps.addon_version.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/cilium-homeassistant/${{ matrix.arch }}-cilium-router:latest
           build-args: |
-            CILIUM_VERSION=${{ matrix.cilium_version }}
+            CILIUM_VERSION=${{ needs.discover-cilium-latest.outputs.version }}
             BUILD_ARCH=${{ matrix.arch }}
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
             BUILD_DESCRIPTION=Routes traffic to Kubernetes pods via Cilium agent
             BUILD_NAME=Cilium Router
             BUILD_REF=${{ github.sha }}
             BUILD_REPOSITORY=${{ github.repository }}
-            BUILD_VERSION=${{ steps.version.outputs.tag }}
+            BUILD_VERSION=${{ steps.addon_version.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
