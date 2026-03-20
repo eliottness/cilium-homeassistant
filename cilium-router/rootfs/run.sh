@@ -58,16 +58,16 @@ fi
 # ══════════════════════════════════════════════════════════════════
 
 # /var/run/cilium — cilium runtime state (host tmpfs /var)
-mkdir -p /proc/1/root/var/run/cilium
+nsenter --mount=/proc/1/ns/mnt mkdir -p /var/run/cilium
 mount --bind /proc/1/root/var/run/cilium /var/run/cilium
 
 # /var/run/cilium/netns — network namespaces (host /var/run/netns)
-mkdir -p /proc/1/root/var/run/netns
+nsenter --mount=/proc/1/ns/mnt mkdir -p /var/run/netns
 mkdir -p /var/run/cilium/netns
 mount --bind /proc/1/root/var/run/netns /var/run/cilium/netns
 
 # /run/xtables.lock — serialize iptables access
-touch /proc/1/root/run/xtables.lock 2>/dev/null || true
+nsenter --mount=/proc/1/ns/mnt touch /run/xtables.lock 2>/dev/null || true
 mount --bind /proc/1/root/run/xtables.lock /run/xtables.lock
 
 # /lib/modules — kernel modules (read-only on squashfs root)
