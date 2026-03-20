@@ -240,7 +240,7 @@ export CILIUM_CLUSTERMESH_CONFIG="${CLUSTERMESH_DIR}/"
 
 # ── 8. Create Node object (MANDATORY: CiliumNode OwnerReference) ─
 echo "[init] Creating/updating Node '${NODE_NAME}'..."
-NODE_IP=$(ip route get "${KUBERNETES_SERVICE_HOST}" 2>/dev/null | awk '{print $7; exit}' || ip route get 1.1.1.1 | awk '{print $7; exit}')
+NODE_IP=$(ip route get "${KUBERNETES_SERVICE_HOST}" 2>/dev/null | sed -n 's/.*src \([^ ]*\).*/\1/p' || ip route get 1.1.1.1 | sed -n 's/.*src \([^ ]*\).*/\1/p')
 ARCH=$(uname -m)
 [ "$ARCH" = "aarch64" ] && ARCH="arm64"
 [ "$ARCH" = "x86_64" ] && ARCH="amd64"
@@ -355,9 +355,14 @@ echo "[agent] Starting cilium-agent as node '${NODE_NAME}'..."
 export KUBE_CLIENT_BACKOFF_BASE="1"
 export KUBE_CLIENT_BACKOFF_DURATION="120"
 
+# Detect the direct routing device (interface toward the API server)
+DIRECT_DEVICE=$(ip route get "${KUBERNETES_SERVICE_HOST}" 2>/dev/null | sed -n 's/.*dev \([^ ]*\).*/\1/p')
+echo "[agent] Direct routing device: ${DIRECT_DEVICE:-auto}"
+
 cilium-agent \
     --config-dir=/tmp/cilium/config-map \
-    --bpf-root=/host/bpf &
+    --bpf-root=/host/bpf \
+    ${DIRECT_DEVICE:+--direct-routing-device="${DIRECT_DEVICE}"} &
 AGENT_PID=$!
 
 wait ${AGENT_PID}
