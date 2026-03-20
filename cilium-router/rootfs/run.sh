@@ -94,11 +94,19 @@ else
     nsenter --target 1 --mount -- \
         sh -c 'mkdir -p /var/run/cilium /var/run/netns && touch /run/xtables.lock'
 
+    # Create mount points in the merged dir that don't exist in the image
+    nsenter --target 1 --mount -- sh -c "
+        mkdir -p '${MERGED_DIR}/sys/fs/bpf'
+        mkdir -p '${MERGED_DIR}/run'
+        touch    '${MERGED_DIR}/run/xtables.lock'
+        mkdir -p '${MERGED_DIR}/lib/modules'
+        mkdir -p '${MERGED_DIR}/var/run/cilium/netns'
+    " 2>&1
+
     # Bind-mount host paths into container's merged dir
     nsenter --target 1 --mount -- sh -c "
         mount --bind /sys/fs/bpf      '${MERGED_DIR}/sys/fs/bpf'
         mount --bind /var/run/cilium   '${MERGED_DIR}/var/run/cilium'
-        mkdir -p '${MERGED_DIR}/var/run/cilium/netns'
         mount --bind /var/run/netns    '${MERGED_DIR}/var/run/cilium/netns'
         mount --bind /run/xtables.lock '${MERGED_DIR}/run/xtables.lock'
         mount --bind /lib/modules      '${MERGED_DIR}/lib/modules'
