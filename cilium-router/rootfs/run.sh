@@ -58,17 +58,17 @@ fi
 # ══════════════════════════════════════════════════════════════════
 
 # /var/run/cilium — cilium runtime state (host tmpfs /var)
-nsenter --mount=/proc/1/ns/mnt mkdir -p /var/run/cilium
-mount --bind /proc/1/root/var/run/cilium /var/run/cilium
+nsenter --mount=/proc/1/ns/mnt -- mkdir -p /var/run/cilium
+mount --bind /proc/1/root/var/run/cilium /var/run/cilium 2>/dev/null || echo "[init] WARNING: bind /var/run/cilium failed"
 
 # /var/run/cilium/netns — network namespaces (host /var/run/netns)
-nsenter --mount=/proc/1/ns/mnt mkdir -p /var/run/netns
+nsenter --mount=/proc/1/ns/mnt -- mkdir -p /var/run/netns
 mkdir -p /var/run/cilium/netns
-mount --bind /proc/1/root/var/run/netns /var/run/cilium/netns
+mount --bind /proc/1/root/var/run/netns /var/run/cilium/netns 2>/dev/null || echo "[init] WARNING: bind /var/run/netns failed"
 
 # /run/xtables.lock — serialize iptables access
-nsenter --mount=/proc/1/ns/mnt touch /run/xtables.lock 2>/dev/null || true
-mount --bind /proc/1/root/run/xtables.lock /run/xtables.lock
+nsenter --mount=/proc/1/ns/mnt -- touch /run/xtables.lock 2>/dev/null || true
+mount --bind /proc/1/root/run/xtables.lock /run/xtables.lock 2>/dev/null || echo "[init] WARNING: bind xtables.lock failed"
 
 # /lib/modules — kernel modules (read-only on squashfs root)
 mount --bind /proc/1/root/lib/modules /lib/modules 2>/dev/null || true
