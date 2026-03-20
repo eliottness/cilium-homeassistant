@@ -14,12 +14,19 @@ init: false
 host_network: true
 host_pid: true
 privileged:
+  - CHOWN
+  - KILL
   - NET_ADMIN
   - NET_RAW
-  - SYS_ADMIN
+  - IPC_LOCK
   - SYS_MODULE
+  - SYS_ADMIN
   - SYS_RESOURCE
-  - DAC_READ_SEARCH
+  - DAC_OVERRIDE
+  - FOWNER
+  - SETGID
+  - SETUID
+  - SYSLOG
 apparmor: false
 full_access: true   # Needed for /sys/fs/bpf, /lib/modules, /proc/sys
 

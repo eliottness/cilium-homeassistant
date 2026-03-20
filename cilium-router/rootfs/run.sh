@@ -50,10 +50,31 @@ if ! kubectl auth can-i create nodes > /dev/null 2>&1; then
 fi
 
 # ══════════════════════════════════════════════════════════════════
-# Init containers — replicate exactly what the DaemonSet does.
+# Host bind mounts — replicate DaemonSet hostPath volumes.
+# HAOS root is read-only squashfs, but /var and /run are tmpfs,
+# and /sys is virtual — all writable.
 # With host_pid:true, /proc is the host's /proc, so
 # /proc/1/ns/* is the same as /hostproc/1/ns/* in the DaemonSet.
 # ══════════════════════════════════════════════════════════════════
+
+# /var/run/cilium — cilium runtime state (host tmpfs /var)
+mkdir -p /proc/1/root/var/run/cilium
+mount --bind /proc/1/root/var/run/cilium /var/run/cilium
+
+# /var/run/cilium/netns — network namespaces (host /var/run/netns)
+mkdir -p /proc/1/root/var/run/netns
+mkdir -p /var/run/cilium/netns
+mount --bind /proc/1/root/var/run/netns /var/run/cilium/netns
+
+# /run/xtables.lock — serialize iptables access
+touch /proc/1/root/run/xtables.lock 2>/dev/null || true
+mount --bind /proc/1/root/run/xtables.lock /run/xtables.lock
+
+# /lib/modules — kernel modules (read-only on squashfs root)
+mount --bind /proc/1/root/lib/modules /lib/modules 2>/dev/null || true
+
+# clustermesh secrets directory (empty placeholder)
+mkdir -p /var/lib/cilium/clustermesh
 
 # ── 2. config (DaemonSet init container #1: "config") ────────────
 echo "[init] config: fetching Cilium config from cluster..."
@@ -114,12 +135,12 @@ rm -f /proc/1/root/tmp/cilium-sysctlfix
 
 # ── 5. mount-bpf-fs (DaemonSet init container #4) ───────────────
 echo "[init] mount-bpf-fs: mounting BPF filesystem..."
-if ! mount | grep -q '/sys/fs/bpf type bpf'; then
+mount --bind /proc/1/root/sys/fs/bpf /sys/fs/bpf 2>/dev/null || {
     mount -t bpf bpf /sys/fs/bpf || {
         echo "[init] FATAL: Failed to mount bpffs."
         exit 1
     }
-fi
+}
 
 # ── 6. clean-cilium-state (DaemonSet init container #5) ─────────
 echo "[init] clean-cilium-state: cleaning stale state..."
@@ -286,11 +307,11 @@ echo "[heartbeat] Started (PID $!)"
 # Matches: cilium-agent --config-dir=/tmp/cilium/config-map
 echo "[agent] Starting cilium-agent as node '${NODE_NAME}'..."
 
+export KUBE_CLIENT_BACKOFF_BASE="1"
+export KUBE_CLIENT_BACKOFF_DURATION="120"
+
 cilium-agent \
-    --config-dir=/tmp/cilium/config-map \
-    --bpf-root=/proc/1/root/sys/fs/bpf \
-    --state-dir=/var/run/cilium \
-    --lib-dir=/var/lib/cilium &
+    --config-dir=/tmp/cilium/config-map &
 AGENT_PID=$!
 
 wait ${AGENT_PID}
