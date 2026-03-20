@@ -1,5 +1,5 @@
 name: "Cilium Router"
-version: "0.1.0"
+version: "0.1.1"
 slug: "cilium_router"
 description: "Routes traffic to Kubernetes pods via Cilium agent"
 url: "https://github.com/eliottness/cilium-homeassistant"
@@ -22,6 +22,8 @@ privileged:
   - SYS_MODULE
   - SYS_ADMIN
   - SYS_RESOURCE
+  - SYS_PTRACE
+  - SYS_CHROOT
   - DAC_OVERRIDE
   - FOWNER
   - SETGID
