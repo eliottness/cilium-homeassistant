@@ -51,29 +51,66 @@ fi
 
 # ══════════════════════════════════════════════════════════════════
 # Host bind mounts — replicate DaemonSet hostPath volumes.
-# HAOS root is read-only squashfs, but /var and /run are tmpfs,
-# and /sys is virtual — all writable.
+# HA addons can't specify arbitrary bind mounts, so we use the
+# docker-inspect trick: find our merged dir on the host, then
+# nsenter into the host mount namespace to bind-mount host paths
+# into our container's overlay filesystem.
+# Ref: https://github.com/felipecrs/netdata-hass-addon
 # With host_pid:true, /proc is the host's /proc, so
 # /proc/1/ns/* is the same as /hostproc/1/ns/* in the DaemonSet.
 # ══════════════════════════════════════════════════════════════════
 
-# /var/run/cilium — cilium runtime state (host tmpfs /var)
-nsenter --mount=/proc/1/ns/mnt -- mkdir -p /var/run/cilium
-mount --bind /proc/1/root/var/run/cilium /var/run/cilium 2>/dev/null || echo "[init] WARNING: bind /var/run/cilium failed"
+# Get container ID from mountinfo (resolv.conf mount reveals it)
+CONTAINER_ID=""
+while IFS= read -r line; do
+    if [[ "${line}" =~ /([a-z0-9]{12,128})/resolv.conf\  ]]; then
+        CONTAINER_ID="${BASH_REMATCH[1]}"
+    fi
+done < /proc/self/mountinfo
 
-# /var/run/cilium/netns — network namespaces (host /var/run/netns)
-nsenter --mount=/proc/1/ns/mnt -- mkdir -p /var/run/netns
-mkdir -p /var/run/cilium/netns
-mount --bind /proc/1/root/var/run/netns /var/run/cilium/netns 2>/dev/null || echo "[init] WARNING: bind /var/run/netns failed"
+if [[ ! "${CONTAINER_ID}" =~ ^[a-z0-9]{12,128}$ ]]; then
+    echo "[init] FATAL: Could not determine container ID"
+    exit 1
+fi
+echo "[init] Container ID: ${CONTAINER_ID}"
 
-# /run/xtables.lock — serialize iptables access
-nsenter --mount=/proc/1/ns/mnt -- touch /run/xtables.lock 2>/dev/null || true
-mount --bind /proc/1/root/run/xtables.lock /run/xtables.lock 2>/dev/null || echo "[init] WARNING: bind xtables.lock failed"
+# Get container's overlay merged dir via docker inspect on the host
+MERGED_DIR=$(nsenter --target 1 --mount -- \
+    docker inspect --format '{{.GraphDriver.Data.MergedDir}}' "${CONTAINER_ID}")
 
-# /lib/modules — kernel modules (read-only on squashfs root)
-mount --bind /proc/1/root/lib/modules /lib/modules 2>/dev/null || true
+if [[ ! "${MERGED_DIR}" =~ ^(/[^/]+)+$ ]]; then
+    echo "[init] FATAL: Could not determine container merged dir"
+    exit 1
+fi
+echo "[init] Container merged dir: ${MERGED_DIR}"
 
-# clustermesh secrets directory (empty placeholder)
+# Check if mounts are already set up (after restart)
+if mountpoint -q /sys/fs/bpf 2>/dev/null && mount | grep -q '/sys/fs/bpf type bpf'; then
+    echo "[init] Host bind mounts already present"
+else
+    echo "[init] Setting up host bind mounts..."
+
+    # Ensure host-side dirs exist (host tmpfs /var, /run)
+    nsenter --target 1 --mount -- \
+        sh -c 'mkdir -p /var/run/cilium /var/run/netns && touch /run/xtables.lock'
+
+    # Bind-mount host paths into container's merged dir
+    nsenter --target 1 --mount -- sh -c "
+        mount --bind /sys/fs/bpf      '${MERGED_DIR}/sys/fs/bpf'
+        mount --bind /var/run/cilium   '${MERGED_DIR}/var/run/cilium'
+        mkdir -p '${MERGED_DIR}/var/run/cilium/netns'
+        mount --bind /var/run/netns    '${MERGED_DIR}/var/run/cilium/netns'
+        mount --bind /run/xtables.lock '${MERGED_DIR}/run/xtables.lock'
+        mount --bind /lib/modules      '${MERGED_DIR}/lib/modules'
+    " 2>&1
+
+    # Restart container so mounts become visible inside
+    echo "[init] Restarting container to activate bind mounts..."
+    nsenter --target 1 --mount -- docker restart "${CONTAINER_ID}"
+    exit 0
+fi
+
+# clustermesh secrets directory (container-local)
 mkdir -p /var/lib/cilium/clustermesh
 
 # ── 2. config (DaemonSet init container #1: "config") ────────────
@@ -134,13 +171,12 @@ nsenter --mount=/proc/1/ns/mnt \
 rm -f /proc/1/root/tmp/cilium-sysctlfix
 
 # ── 5. mount-bpf-fs (DaemonSet init container #4) ───────────────
-echo "[init] mount-bpf-fs: mounting BPF filesystem..."
-mount --bind /proc/1/root/sys/fs/bpf /sys/fs/bpf 2>/dev/null || {
-    mount -t bpf bpf /sys/fs/bpf || {
-        echo "[init] FATAL: Failed to mount bpffs."
-        exit 1
-    }
-}
+# BPF filesystem is bind-mounted from host via the merged dir trick above.
+echo "[init] mount-bpf-fs: verifying BPF filesystem..."
+if ! mount | grep -q '/sys/fs/bpf type bpf'; then
+    echo "[init] FATAL: BPF filesystem not mounted (bind mount should have set it up)"
+    exit 1
+fi
 
 # ── 6. clean-cilium-state (DaemonSet init container #5) ─────────
 echo "[init] clean-cilium-state: cleaning stale state..."
