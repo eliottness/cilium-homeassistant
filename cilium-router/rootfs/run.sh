@@ -85,13 +85,8 @@ fi
 echo "[init] Container merged dir: ${MERGED_DIR}"
 
 # Check if mounts are already set up (after restart)
-if mount | grep -q "${MERGED_DIR}.*bpf"; then
+if mountpoint -q /host/bpf 2>/dev/null; then
     echo "[init] Host bind mounts already present"
-    # Docker may re-add its own sysfs mount on restart, stacking on top of
-    # our bind mount. Peel off extra mounts until only one remains.
-    while [ "$(mount | grep -c '/sys/fs/bpf')" -gt 1 ]; do
-        umount /sys/fs/bpf 2>/dev/null || break
-    done
 else
     echo "[init] Setting up host bind mounts..."
 
@@ -99,9 +94,10 @@ else
     nsenter --target 1 --mount -- \
         sh -c 'mkdir -p /var/run/cilium /var/run/netns && touch /run/xtables.lock'
 
-    # Create mount points in the merged dir that don't exist in the image
+    # Create mount points in the merged dir that don't exist in the image.
+    # Host BPF goes to /host/bpf to avoid conflicting with Docker's /sys/fs/bpf.
     nsenter --target 1 --mount -- sh -c "
-        mkdir -p '${MERGED_DIR}/sys/fs/bpf'
+        mkdir -p '${MERGED_DIR}/host/bpf'
         mkdir -p '${MERGED_DIR}/run'
         touch    '${MERGED_DIR}/run/xtables.lock'
         mkdir -p '${MERGED_DIR}/lib/modules'
@@ -110,7 +106,7 @@ else
 
     # Bind-mount host paths into container's merged dir
     nsenter --target 1 --mount -- sh -c "
-        mount --bind /sys/fs/bpf      '${MERGED_DIR}/sys/fs/bpf'
+        mount --bind /sys/fs/bpf      '${MERGED_DIR}/host/bpf'
         mount --bind /var/run/cilium   '${MERGED_DIR}/var/run/cilium'
         mount --bind /var/run/netns    '${MERGED_DIR}/var/run/cilium/netns'
         mount --bind /run/xtables.lock '${MERGED_DIR}/run/xtables.lock'
@@ -184,13 +180,12 @@ nsenter --mount=/proc/1/ns/mnt \
 rm -f /proc/1/root/tmp/cilium-sysctlfix
 
 # ── 5. mount-bpf-fs (DaemonSet init container #4) ───────────────
-# BPF filesystem is bind-mounted from host via the merged dir trick above.
-echo "[init] mount-bpf-fs: verifying BPF filesystem..."
-if ! mountpoint -q /sys/fs/bpf 2>/dev/null; then
-    echo "[init] FATAL: /sys/fs/bpf is not a mountpoint (bind mount should have set it up)"
+# Host BPF is bind-mounted to /host/bpf to avoid conflicting with Docker's /sys/fs/bpf.
+echo "[init] mount-bpf-fs: verifying host BPF filesystem at /host/bpf..."
+if ! mountpoint -q /host/bpf 2>/dev/null; then
+    echo "[init] FATAL: Host BPF filesystem not mounted at /host/bpf"
     exit 1
 fi
-echo "[init]   /sys/fs/bpf OK ($(mount | grep -c '/sys/fs/bpf') mount(s))"
 
 # ── 6. clean-cilium-state (DaemonSet init container #5) ─────────
 echo "[init] clean-cilium-state: cleaning stale state..."
@@ -361,7 +356,8 @@ export KUBE_CLIENT_BACKOFF_BASE="1"
 export KUBE_CLIENT_BACKOFF_DURATION="120"
 
 cilium-agent \
-    --config-dir=/tmp/cilium/config-map &
+    --config-dir=/tmp/cilium/config-map \
+    --bpf-root=/host/bpf &
 AGENT_PID=$!
 
 wait ${AGENT_PID}
