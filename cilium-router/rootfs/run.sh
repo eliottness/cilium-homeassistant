@@ -95,16 +95,22 @@ ln -sfn /sys /host/sys 2>/dev/null || true
 echo "[init]   Config ready ($(ls /tmp/cilium/config-map | wc -l) keys)"
 
 # ── 3. mount-cgroup (DaemonSet init container #2) ────────────────
+# The DaemonSet copies the binary to a hostPath volume, then runs via nsenter.
+# We copy to the host's /tmp via /proc/1/root/tmp (host_pid: true).
 echo "[init] mount-cgroup: mounting cgroup2 on host..."
+cp /usr/bin/cilium-mount /proc/1/root/tmp/cilium-mount
 nsenter --cgroup=/proc/1/ns/cgroup --mount=/proc/1/ns/mnt \
-    /usr/bin/cilium-mount /run/cilium/cgroupv2 2>&1 || \
+    /tmp/cilium-mount /run/cilium/cgroupv2 2>&1 || \
     echo "[init]   WARNING: cilium-mount failed"
+rm -f /proc/1/root/tmp/cilium-mount
 
 # ── 4. apply-sysctl-overwrites (DaemonSet init container #3) ────
 echo "[init] apply-sysctl-overwrites: applying sysctls on host..."
+cp /usr/bin/cilium-sysctlfix /proc/1/root/tmp/cilium-sysctlfix
 nsenter --mount=/proc/1/ns/mnt \
-    /usr/bin/cilium-sysctlfix 2>&1 || \
+    /tmp/cilium-sysctlfix 2>&1 || \
     echo "[init]   WARNING: cilium-sysctlfix failed"
+rm -f /proc/1/root/tmp/cilium-sysctlfix
 
 # ── 5. mount-bpf-fs (DaemonSet init container #4) ───────────────
 echo "[init] mount-bpf-fs: mounting BPF filesystem..."
