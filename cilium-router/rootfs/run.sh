@@ -132,7 +132,47 @@ export WRITE_CNI_CONF_WHEN_READY=""
 mount -o remount,rw /proc/sys 2>/dev/null || \
     echo "[init] WARNING: Failed to remount /proc/sys rw"
 
-# ── 7. Create Node object (MANDATORY: CiliumNode OwnerReference) ─
+# ── 7. Fetch clustermesh secrets (DaemonSet mounts these as a projected volume)
+CLUSTERMESH_DIR="/var/lib/cilium/clustermesh"
+mkdir -p "${CLUSTERMESH_DIR}"
+echo "[init] Fetching clustermesh secrets..."
+
+# cilium-clustermesh secret (main config)
+kubectl get secret cilium-clustermesh -n "${CILIUM_NAMESPACE}" -o json 2>/dev/null \
+    | jq -r '.data // {} | to_entries[] | "\(.key)\n\(.value)"' \
+    | while IFS= read -r key && IFS= read -r value; do
+        echo "${value}" | base64 -d > "${CLUSTERMESH_DIR}/${key}"
+    done && echo "[init]   cilium-clustermesh: OK" || echo "[init]   cilium-clustermesh: not found (optional)"
+
+# clustermesh-apiserver-remote-cert (remote cluster TLS)
+kubectl get secret clustermesh-apiserver-remote-cert -n "${CILIUM_NAMESPACE}" -o json 2>/dev/null \
+    | jq -r '.data // {} | to_entries[] | "\(.key)\n\(.value)"' \
+    | while IFS= read -r key && IFS= read -r value; do
+        case "${key}" in
+            tls.key) echo "${value}" | base64 -d > "${CLUSTERMESH_DIR}/common-etcd-client.key" ;;
+            tls.crt) echo "${value}" | base64 -d > "${CLUSTERMESH_DIR}/common-etcd-client.crt" ;;
+            ca.crt)  echo "${value}" | base64 -d > "${CLUSTERMESH_DIR}/common-etcd-client-ca.crt" ;;
+        esac
+    done && echo "[init]   clustermesh-apiserver-remote-cert: OK" || echo "[init]   remote-cert: not found (optional)"
+
+# clustermesh-apiserver-local-cert (local cluster TLS)
+kubectl get secret clustermesh-apiserver-local-cert -n "${CILIUM_NAMESPACE}" -o json 2>/dev/null \
+    | jq -r '.data // {} | to_entries[] | "\(.key)\n\(.value)"' \
+    | while IFS= read -r key && IFS= read -r value; do
+        case "${key}" in
+            tls.key) echo "${value}" | base64 -d > "${CLUSTERMESH_DIR}/local-etcd-client.key" ;;
+            tls.crt) echo "${value}" | base64 -d > "${CLUSTERMESH_DIR}/local-etcd-client.crt" ;;
+            ca.crt)  echo "${value}" | base64 -d > "${CLUSTERMESH_DIR}/local-etcd-client-ca.crt" ;;
+        esac
+    done && echo "[init]   clustermesh-apiserver-local-cert: OK" || echo "[init]   local-cert: not found (optional)"
+
+chmod 400 "${CLUSTERMESH_DIR}"/*.key 2>/dev/null || true
+echo "[init]   Clustermesh files: $(ls ${CLUSTERMESH_DIR}/ 2>/dev/null | tr '\n' ' ')"
+
+# Set the clustermesh config path for the agent
+export CILIUM_CLUSTERMESH_CONFIG="${CLUSTERMESH_DIR}/"
+
+# ── 8. Create Node object (MANDATORY: CiliumNode OwnerReference) ─
 echo "[init] Creating/updating Node '${NODE_NAME}'..."
 NODE_IP=$(ip route get "${KUBERNETES_SERVICE_HOST}" 2>/dev/null | awk '{print $7; exit}' || ip route get 1.1.1.1 | awk '{print $7; exit}')
 ARCH=$(uname -m)
@@ -184,12 +224,12 @@ kubectl patch node "${NODE_NAME}" --type=merge --subresource=status \
 echo "[init] Node '${NODE_NAME}' ready at ${NODE_IP}"
 
 # ── 8. Kernel check ─────────────────────────────────────────────
-if [ -f /sys/kernel/btf/vmlinux ]; then
+if [ -f /proc/1/root/sys/kernel/btf/vmlinux ]; then
     echo "[init] BTF available"
 else
     echo "[init] WARNING: BTF not available - legacy BPF probe mode"
 fi
-if [ -d /sys/module/wireguard ]; then
+if [ -d /proc/1/root/sys/module/wireguard ]; then
     echo "[init] WireGuard module loaded"
 else
     echo "[init] WARNING: WireGuard module not found"
@@ -248,7 +288,7 @@ echo "[agent] Starting cilium-agent as node '${NODE_NAME}'..."
 
 cilium-agent \
     --config-dir=/tmp/cilium/config-map \
-    --bpf-root=/sys/fs/bpf \
+    --bpf-root=/proc/1/root/sys/fs/bpf \
     --state-dir=/var/run/cilium \
     --lib-dir=/var/lib/cilium &
 AGENT_PID=$!
