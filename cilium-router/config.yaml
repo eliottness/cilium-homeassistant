@@ -12,6 +12,7 @@ init: false
 
 # Full network + BPF access (matches DaemonSet security context)
 host_network: true
+host_pid: true
 privileged:
   - NET_ADMIN
   - NET_RAW
