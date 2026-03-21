@@ -352,6 +352,16 @@ EOLEASE
 ) &
 echo "[heartbeat] Started (PID $!)"
 
+# ── Clean stale socket LB BPF links ──────────────────────────────
+# BPF links for socket-level LB are pinned on the host BPF filesystem and
+# persist across container restarts. When the addon restarts, it gets a new
+# cgroup, but cilium-agent finds existing pins and calls bpf_link_update()
+# which replaces the program but keeps the link attached to the OLD (dead)
+# cgroup. Deleting the pins forces cilium-agent to create fresh links
+# targeting the current host root cgroup.
+echo "[init] Cleaning stale socket LB BPF links..."
+rm -f /host/bpf/cilium/socketlb/links/cgroup/* 2>/dev/null || true
+
 # ── cilium-agent (DaemonSet main container) ──────────────────────
 # Matches: cilium-agent --config-dir=/tmp/cilium/config-map
 echo "[agent] Starting cilium-agent as node '${NODE_NAME}'..."

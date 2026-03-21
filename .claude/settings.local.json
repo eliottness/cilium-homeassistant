@@ -12,7 +12,12 @@
       "Skill(humanizer)",
       "WebFetch(domain:community.home-assistant.io)",
       "Bash(gh api:*)",
-      "Bash(find /Users/eliott.bouhana/dd/cilium-homeassistant -type f \\\\\\(-name *.md -o -name *.txt -o -name *.sh -o -name Dockerfile \\\\\\))"
+      "Bash(find /Users/eliott.bouhana/dd/cilium-homeassistant -type f \\\\\\(-name *.md -o -name *.txt -o -name *.sh -o -name Dockerfile \\\\\\))",
+      "mcp__filesystem__list_directory",
+      "mcp__filesystem__directory_tree",
+      "mcp__filesystem__read_text_file",
+      "Bash(find /home/eliott/git/cilium-homeassistant/cilium-router -type f -name *.sh -o -name *.yaml -o -name *.json)",
+      "Bash(ssh:*)"
     ]
   }
 }
