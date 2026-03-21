@@ -363,7 +363,8 @@ export KUBE_CLIENT_BACKOFF_DURATION="120"
 DIRECT_DEVICE=$(ip route get "${KUBERNETES_SERVICE_HOST}" 2>/dev/null | sed -n 's/.*dev \([^ ]*\).*/\1/p')
 echo "[agent] Direct routing device: ${DIRECT_DEVICE:-auto}"
 
-cilium-agent \
+nsenter --cgroup=/proc/1/ns/cgroup -- \
+    cilium-agent \
     --config-dir=/tmp/cilium/config-map \
     --bpf-root=/host/bpf \
     --cgroup-root=/host/cgroup \
