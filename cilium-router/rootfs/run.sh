@@ -152,6 +152,8 @@ printf '%s' "false" > /tmp/cilium/config-map/enable-health-check-nodeport
 printf '%s' "false" > /tmp/cilium/config-map/cni-exclusive
 printf '%s' "/etc/cilium/kubeconfig" > /tmp/cilium/config-map/k8s-kubeconfig-path
 printf '%s' "/proc" > /tmp/cilium/config-map/procfs
+# No kube-proxy on HA — need socket-level LB for service IP DNAT
+printf '%s' "true"  > /tmp/cilium/config-map/bpf-lb-sock
 if [ "${LOG_LEVEL}" = "debug" ]; then
     printf '%s' "true" > /tmp/cilium/config-map/debug
 fi
