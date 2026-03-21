@@ -106,12 +106,11 @@ else
 
     # Bind-mount host paths into container's merged dir
     nsenter --target 1 --mount -- sh -c "
-        mount --bind /sys/fs/bpf           '${MERGED_DIR}/host/bpf'
-        mount --bind /var/run/cilium        '${MERGED_DIR}/var/run/cilium'
-        mount --bind /var/run/netns         '${MERGED_DIR}/var/run/cilium/netns'
-        mount --bind /run/cilium/cgroupv2   '${MERGED_DIR}/run/cilium/cgroupv2'
-        mount --bind /run/xtables.lock      '${MERGED_DIR}/run/xtables.lock'
-        mount --bind /lib/modules           '${MERGED_DIR}/lib/modules'
+        mount --bind /sys/fs/bpf      '${MERGED_DIR}/host/bpf'
+        mount --bind /var/run/cilium   '${MERGED_DIR}/var/run/cilium'
+        mount --bind /var/run/netns    '${MERGED_DIR}/var/run/cilium/netns'
+        mount --bind /run/xtables.lock '${MERGED_DIR}/run/xtables.lock'
+        mount --bind /lib/modules      '${MERGED_DIR}/lib/modules'
     " 2>&1
 
     # Restart container so mounts become visible inside
