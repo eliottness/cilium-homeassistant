@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Fix socket-level load balancing surviving addon restarts: clean stale BPF link pins before starting cilium-agent so programs attach to the current host root cgroup instead of a dead cgroup from a previous container instance
+
 ## 0.1.1
 
 - Match DaemonSet pod behavior: bind-mount host paths (`/var/run/cilium`, netns, xtables.lock, `/lib/modules`, `/sys/fs/bpf`) instead of container-local directories

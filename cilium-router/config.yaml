@@ -1,5 +1,5 @@
 name: "Cilium Router"
-version: "0.1.1"
+version: "0.1.2"
 slug: "cilium_router"
 description: "Routes traffic to Kubernetes pods via Cilium agent"
 url: "https://github.com/eliottness/cilium-homeassistant"
