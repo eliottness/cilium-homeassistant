@@ -20,7 +20,7 @@ COPY rootfs /
 RUN chmod +x /run.sh
 
 RUN mkdir -p /var/run/cilium /var/lib/cilium /etc/cilium \
-    /tmp/cilium/config-map /run/cilium/cgroupv2 /data /host/bpf
+    /tmp/cilium/config-map /run/cilium/cgroupv2 /data /host/bpf /host/cgroup
 
 ARG BUILD_ARCH BUILD_DATE BUILD_DESCRIPTION BUILD_NAME BUILD_REF BUILD_REPOSITORY BUILD_VERSION
 LABEL \

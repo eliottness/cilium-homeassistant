@@ -98,6 +98,7 @@ else
     # Host BPF goes to /host/bpf to avoid conflicting with Docker's /sys/fs/bpf.
     nsenter --target 1 --mount -- sh -c "
         mkdir -p '${MERGED_DIR}/host/bpf'
+        mkdir -p '${MERGED_DIR}/host/cgroup'
         mkdir -p '${MERGED_DIR}/run'
         touch    '${MERGED_DIR}/run/xtables.lock'
         mkdir -p '${MERGED_DIR}/lib/modules'
@@ -107,6 +108,7 @@ else
     # Bind-mount host paths into container's merged dir
     nsenter --target 1 --mount -- sh -c "
         mount --bind /sys/fs/bpf      '${MERGED_DIR}/host/bpf'
+        mount --bind /sys/fs/cgroup   '${MERGED_DIR}/host/cgroup'
         mount --bind /var/run/cilium   '${MERGED_DIR}/var/run/cilium'
         mount --bind /var/run/netns    '${MERGED_DIR}/var/run/cilium/netns'
         mount --bind /run/xtables.lock '${MERGED_DIR}/run/xtables.lock'
@@ -364,6 +366,7 @@ echo "[agent] Direct routing device: ${DIRECT_DEVICE:-auto}"
 cilium-agent \
     --config-dir=/tmp/cilium/config-map \
     --bpf-root=/host/bpf \
+    --cgroup-root=/host/cgroup \
     ${DIRECT_DEVICE:+--direct-routing-device="${DIRECT_DEVICE}"} &
 AGENT_PID=$!
 
