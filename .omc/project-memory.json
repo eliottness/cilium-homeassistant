@@ -1,0 +1,284 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1774046253925,
+  "projectRoot": "/Users/eliott.bouhana/go/src/github.com/DataDog/cilium-homeassistant",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "cilium": {
+      "path": "cilium",
+      "purpose": null,
+      "fileCount": 30,
+      "lastAccessed": 1774046253920,
+      "keyFiles": [
+        "AUTHORS",
+        "CHANGELOG.md",
+        "CODEOWNERS",
+        "CODE_OF_CONDUCT.md",
+        "CONTRIBUTING.md"
+      ]
+    },
+    "cilium-router": {
+      "path": "cilium-router",
+      "purpose": null,
+      "fileCount": 6,
+      "lastAccessed": 1774046253921,
+      "keyFiles": [
+        "CHANGELOG.md",
+        "DOCS.md",
+        "Dockerfile",
+        "config.yaml",
+        "icon.png"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "cilium-router/rootfs/run.sh",
+      "accessCount": 58,
+      "lastAccessed": 1774086474586,
+      "type": "file"
+    },
+    {
+      "path": "cilium",
+      "accessCount": 20,
+      "lastAccessed": 1774086235904,
+      "type": "directory"
+    },
+    {
+      "path": "cilium-router/Dockerfile",
+      "accessCount": 12,
+      "lastAccessed": 1774084071843,
+      "type": "file"
+    },
+    {
+      "path": "cilium-router/config.yaml",
+      "accessCount": 10,
+      "lastAccessed": 1774053597765,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 8,
+      "lastAccessed": 1774085452378,
+      "type": "directory"
+    },
+    {
+      "path": "cilium/pkg",
+      "accessCount": 8,
+      "lastAccessed": 1774085536932,
+      "type": "directory"
+    },
+    {
+      "path": "cilium-router/CHANGELOG.md",
+      "accessCount": 6,
+      "lastAccessed": 1774053613375,
+      "type": "file"
+    },
+    {
+      "path": "cilium-router/DOCS.md",
+      "accessCount": 4,
+      "lastAccessed": 1774053613139,
+      "type": "file"
+    },
+    {
+      "path": "values.yaml",
+      "accessCount": 4,
+      "lastAccessed": 1774053662869,
+      "type": "file"
+    },
+    {
+      "path": "cilium/pkg/datapath/loader/base.go",
+      "accessCount": 4,
+      "lastAccessed": 1774085502169,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 3,
+      "lastAccessed": 1774053599980,
+      "type": "file"
+    },
+    {
+      "path": "cilium/pkg/cgroups/cgroups_linux.go",
+      "accessCount": 3,
+      "lastAccessed": 1774085733635,
+      "type": "file"
+    },
+    {
+      "path": "cilium/pkg/cgroups/cgroups.go",
+      "accessCount": 3,
+      "lastAccessed": 1774086104445,
+      "type": "file"
+    },
+    {
+      "path": "cilium/pkg/socketlb/socketlb.go",
+      "accessCount": 3,
+      "lastAccessed": 1774086233650,
+      "type": "file"
+    },
+    {
+      "path": "cilium/pkg/socketlb/cgroup.go",
+      "accessCount": 2,
+      "lastAccessed": 1774085517261,
+      "type": "file"
+    },
+    {
+      "path": "cilium.log",
+      "accessCount": 2,
+      "lastAccessed": 1774086161565,
+      "type": "file"
+    },
+    {
+      "path": "repository.yaml",
+      "accessCount": 1,
+      "lastAccessed": 1774046358761,
+      "type": "file"
+    },
+    {
+      "path": "pod.yaml",
+      "accessCount": 1,
+      "lastAccessed": 1774046509506,
+      "type": "file"
+    },
+    {
+      "path": "message.txt",
+      "accessCount": 1,
+      "lastAccessed": 1774053599740,
+      "type": "file"
+    },
+    {
+      "path": "cilium/pkg/datapath/sockets/sockets.go",
+      "accessCount": 1,
+      "lastAccessed": 1774053609343,
+      "type": "file"
+    },
+    {
+      "path": "cilium-router",
+      "accessCount": 1,
+      "lastAccessed": 1774053613081,
+      "type": "directory"
+    },
+    {
+      "path": "cilium/pkg/socketlb",
+      "accessCount": 1,
+      "lastAccessed": 1774054270588,
+      "type": "directory"
+    },
+    {
+      "path": "cilium/daemon",
+      "accessCount": 1,
+      "lastAccessed": 1774054289487,
+      "type": "directory"
+    },
+    {
+      "path": "cilium/daemon/cmd",
+      "accessCount": 1,
+      "lastAccessed": 1774054327462,
+      "type": "directory"
+    },
+    {
+      "path": "cilium/pkg/option",
+      "accessCount": 1,
+      "lastAccessed": 1774054328531,
+      "type": "directory"
+    },
+    {
+      "path": "cilium/pkg/cgroups/manager/provider.go",
+      "accessCount": 1,
+      "lastAccessed": 1774085458693,
+      "type": "file"
+    },
+    {
+      "path": "cilium/pkg/datapath/loader/sock.go",
+      "accessCount": 1,
+      "lastAccessed": 1774085459927,
+      "type": "file"
+    },
+    {
+      "path": "cilium/pkg/datapath/loader",
+      "accessCount": 1,
+      "lastAccessed": 1774085474966,
+      "type": "directory"
+    },
+    {
+      "path": "cilium/pkg/datapath",
+      "accessCount": 1,
+      "lastAccessed": 1774085490856,
+      "type": "directory"
+    },
+    {
+      "path": "cilium/pkg/cgroups/manager/manager.go",
+      "accessCount": 1,
+      "lastAccessed": 1774085496237,
+      "type": "file"
+    },
+    {
+      "path": "cilium/pkg/cgroups/manager/cell.go",
+      "accessCount": 1,
+      "lastAccessed": 1774085502651,
+      "type": "file"
+    },
+    {
+      "path": "cilium/pkg/socketlb/cgroup_test.go",
+      "accessCount": 1,
+      "lastAccessed": 1774085517789,
+      "type": "file"
+    },
+    {
+      "path": "cilium/pkg/defaults",
+      "accessCount": 1,
+      "lastAccessed": 1774085523775,
+      "type": "directory"
+    },
+    {
+      "path": "cilium/pkg/kpr/initializer/kube_proxy_replacement.go",
+      "accessCount": 1,
+      "lastAccessed": 1774085531463,
+      "type": "file"
+    },
+    {
+      "path": "cilium/pkg/datapath/config/sock_config.go",
+      "accessCount": 1,
+      "lastAccessed": 1774085537285,
+      "type": "file"
+    },
+    {
+      "path": "cilium/pkg/mountinfo",
+      "accessCount": 1,
+      "lastAccessed": 1774085939276,
+      "type": "directory"
+    },
+    {
+      "path": "cilium/pkg/mountinfo/mountinfo_linux.go",
+      "accessCount": 1,
+      "lastAccessed": 1774085942691,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

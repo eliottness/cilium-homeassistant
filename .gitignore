@@ -1,5 +1,5 @@
-.omc/
-.claude/
+.omc
+!.omc/skills
 cilium/
 values.yaml
 *.kubeconfig

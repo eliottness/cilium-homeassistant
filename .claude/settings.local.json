@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:github.com)",
+      "mcp__plugin_oh-my-claudecode_t__state_write",
+      "mcp__plugin_oh-my-claudecode_t__state_clear",
+      "Bash(gh run:*)",
+      "WebFetch(domain:developers.home-assistant.io)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Skill(humanizer)",
+      "WebFetch(domain:community.home-assistant.io)",
+      "Bash(gh api:*)",
+      "Bash(find /Users/eliott.bouhana/dd/cilium-homeassistant -type f \\\\\\(-name *.md -o -name *.txt -o -name *.sh -o -name Dockerfile \\\\\\))"
+    ]
+  }
+}
