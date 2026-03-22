@@ -321,14 +321,14 @@ trap cleanup SIGTERM SIGINT EXIT
 HEARTBEAT_FAILURES=0
 (
     while true; do
-        TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S.000000Z")
         if kubectl patch lease "${NODE_NAME}" -n kube-node-lease \
             --type=merge \
             -p "{\"spec\":{\"renewTime\":\"${TIMESTAMP}\"}}" \
             2>/dev/null; then
             HEARTBEAT_FAILURES=0
         else
-            kubectl create -f - <<EOLEASE 2>/dev/null || true
+            if kubectl create -f - <<EOLEASE 2>/dev/null
 apiVersion: coordination.k8s.io/v1
 kind: Lease
 metadata:
@@ -339,9 +339,13 @@ spec:
   leaseDurationSeconds: 40
   renewTime: "${TIMESTAMP}"
 EOLEASE
-            HEARTBEAT_FAILURES=$((HEARTBEAT_FAILURES + 1))
-            if [ $((HEARTBEAT_FAILURES % 6)) -eq 0 ]; then
-                echo "[heartbeat] WARNING: ${HEARTBEAT_FAILURES} consecutive failures" >&2
+            then
+                HEARTBEAT_FAILURES=0
+            else
+                HEARTBEAT_FAILURES=$((HEARTBEAT_FAILURES + 1))
+                if [ $((HEARTBEAT_FAILURES % 30)) -eq 0 ]; then
+                    echo "[heartbeat] WARNING: ${HEARTBEAT_FAILURES} consecutive failures" >&2
+                fi
             fi
         fi
         kubectl patch node "${NODE_NAME}" --type=merge --subresource=status \
